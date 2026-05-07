@@ -46,5 +46,33 @@ router.post(
   },
 );
 
+router.post(
+  '/image',
+  upload.single('image'),
+  (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    return res.json({
+      message: 'File uploaded successfully',
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      url: `/uploads/${req.file.filename}`,
+    });
+  },
+);
+
+router.use((err, req, res, next) => {
+  if (!err) return next();
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ message: 'File too large. Max allowed size is 200KB.' });
+    }
+    return res.status(400).json({ message: err.message || 'Upload failed.' });
+  }
+  return res.status(500).json({ message: 'Upload failed.' });
+});
+
 module.exports = router;
 

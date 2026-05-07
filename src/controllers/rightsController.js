@@ -1,4 +1,5 @@
 const rightsService = require('../services/rightsService');
+const userProvisionService = require('../services/userProvisionService');
 
 async function saveRightsController(req, res) {
   const { employeeCode, type, sections, macAddress } = req.body || {};
@@ -18,6 +19,8 @@ async function saveRightsController(req, res) {
       Array.isArray(sections) ? sections : [],
       macAddress,
     );
+    // Ensure employee can log in after rights assignment (default captcha password).
+    await userProvisionService.ensureUserForEmployeeCode(employeeCode, type);
     return res.json({ record });
   } catch (error) {
     // eslint-disable-next-line no-console

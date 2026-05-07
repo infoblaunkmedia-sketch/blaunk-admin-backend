@@ -103,6 +103,32 @@ async function getShareholdingController(req, res) {
   }
 }
 
+async function listShareholdingsController(req, res) {
+  const { q, limit } = req.query || {};
+  try {
+    const records = await shareholdingService.listShareholdings({ q, limit });
+    return res.json({ records });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('listShareholdings error:', error);
+    return res.status(500).json({ message: 'Failed to list shareholding records.' });
+  }
+}
+
+async function deleteShareholdingController(req, res) {
+  const { pan } = req.params || {};
+  if (!pan) return res.status(400).json({ message: 'PAN is required.' });
+  try {
+    const deletedCount = await shareholdingService.deleteByPan(pan);
+    if (!deletedCount) return res.status(404).json({ message: 'Shareholding record not found.' });
+    return res.json({ deleted: true });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('deleteShareholding error:', error);
+    return res.status(500).json({ message: 'Failed to delete shareholding record.' });
+  }
+}
+
 async function exportShareholdingMISController(req, res) {
   const { financialYear, month, department, status, format } = req.body || {};
 
@@ -205,7 +231,9 @@ async function exportShareholdingMISController(req, res) {
 
 module.exports = {
   saveShareholdingController,
+  listShareholdingsController,
   getShareholdingController,
+  deleteShareholdingController,
   exportShareholdingMISController,
 };
 

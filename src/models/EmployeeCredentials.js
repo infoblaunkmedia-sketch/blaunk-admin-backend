@@ -63,6 +63,7 @@ const employeeCredentialsSchema = new mongoose.Schema(
     ctcPerDay: String,
     gratuity: String,
     references: [referenceSchema],
+    employeePhotoUrl: String,
     employeeDocumentUrl: String,
   },
   { timestamps: true },

@@ -2,6 +2,8 @@ const authService = require('../services/authService');
 const EmployeeCredentials = require('../models/EmployeeCredentials');
 const User = require('../models/User');
 const Admin = require('../models/Admin');
+const ipWhitelistService = require('../services/ipWhitelistService');
+const { getClientIp } = require('../middleware/checkIPWhitelist');
 
 async function forgotPasswordController(req, res) {
   const { email } = req.body || {};
@@ -49,12 +51,30 @@ async function loginController(req, res) {
   }
   const adminUsername = (process.env.ADMIN_USERNAME || 'admin').trim().toLowerCase();
   const isAdmin = String(username).trim().toLowerCase() === adminUsername;
-  if (!isAdmin && (!captcha || !String(captcha).trim())) {
+  const fullPath = `${req.baseUrl || ''}${req.path || ''}`;
+  const isAdminRoute = fullPath === '/api/auth/admin/login';
+  if (!isAdmin && !isAdminRoute && (!captcha || !String(captcha).trim())) {
     return res.status(400).json({ message: 'Captcha is required for non-admin login.' });
   }
 
   try {
     const { user, token } = await authService.login({ username, password });
+
+    if (user.role !== 'admin' && String(user.status || 'Active') !== 'Active') {
+      return res.status(403).json({ message: 'Account disabled. Please contact your administrator.' });
+    }
+
+    // IP whitelist: enforce ONLY for internal employees (not admin, not 3PC).
+    // Note: this controller is used for both `/api/auth/login` and `/api/auth/admin/login`.
+    const is3pc = String(user.employeeType || '').toLowerCase() === '3pc';
+    if (!isAdmin && !isAdminRoute && !is3pc) {
+      const clientIp = getClientIp(req);
+      const permitted = await ipWhitelistService.isRequestAllowed(clientIp);
+      if (!permitted) {
+        return res.status(403).json({ message: 'Access Denied: Unauthorized IP' });
+      }
+    }
+
     return res.json({
       token,
       user: {
@@ -84,9 +104,17 @@ async function meController(req, res) {
       } else {
         const dbUser = await User.findOne(
           { username: user.username },
-          { email: 1 },
+          { email: 1, employeeCode: 1, employeeType: 1, status: 1, passwordResetRequired: 1 },
         ).lean();
-        if (dbUser && dbUser.email) user.email = dbUser.email;
+        if (dbUser) {
+          if (dbUser.email) user.email = dbUser.email;
+          if (dbUser.employeeCode != null && dbUser.employeeCode !== '')
+            user.employeeCode = dbUser.employeeCode;
+          if (dbUser.employeeType) user.employeeType = dbUser.employeeType;
+          if (dbUser.status) user.status = dbUser.status;
+          if (dbUser.passwordResetRequired != null)
+            user.passwordResetRequired = !!dbUser.passwordResetRequired;
+        }
       }
     } catch {
       // leave email unset on lookup error
@@ -106,9 +134,32 @@ async function meController(req, res) {
   return res.json({ user });
 }
 
+async function updateProfileController(req, res) {
+  try {
+    const { email, currentPassword, newPassword } = req.body || {};
+    const user = await authService.updateOwnProfile(req.user, {
+      email,
+      currentPassword,
+      newPassword,
+    });
+    return res.json({ message: 'Profile updated successfully.', user });
+  } catch (error) {
+    const message = error?.message || 'Failed to update profile.';
+    const status = /unauthorized/i.test(message)
+      ? 401
+      : /not found/i.test(message)
+        ? 404
+        : /required|incorrect|least 6/i.test(message)
+          ? 400
+          : 500;
+    return res.status(status).json({ message });
+  }
+}
+
 module.exports = {
   loginController,
   meController,
+  updateProfileController,
   forgotPasswordController,
   resetPasswordController,
 };

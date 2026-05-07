@@ -2,20 +2,18 @@ const Rights = require('../models/Rights');
 const macAddressConfigService = require('./macAddressConfigService');
 
 const ALL_SECTIONS = [
-  'Management',
-  'Finance',
-  'M & A',
-  'Sales',
-  'Company Secretary',
-  'HR',
-  'Payslip',
-  'IT Dept',
-  'Admin & Personnel',
-  'Customer Care',
-  'Retail Shop',
-  'DSA',
-  'Verifier',
-  'C & D MANAGEMENT',
+  // Frontend module permissions (sidebar/routes)
+  'dashboard',
+  'cms',
+  'people',
+  'channelPartners',
+  'finance',
+  'platform',
+  'marketing',
+  'customers',
+  'reports',
+  'corporate',
+  'settings',
 ];
 
 async function saveRights(employeeCode, type, sections, macAddress) {

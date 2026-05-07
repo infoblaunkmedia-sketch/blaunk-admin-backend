@@ -17,6 +17,10 @@ const captchaConfigRoutes = require('./routes/captchaConfigRoutes');
 const ipAddressConfigRoutes = require('./routes/ipAddressConfigRoutes');
 const macAddressConfigRoutes = require('./routes/macAddressConfigRoutes');
 const adminIpWhitelistRoutes = require('./routes/adminIpWhitelistRoutes');
+const thirdPartyCredentialRoutes = require('./routes/thirdPartyCredentialRoutes');
+const userRoutes = require('./routes/userRoutes');
+const dsaSliderRoutes = require('./routes/dsaSliderRoutes');
+const DsaSlider = require('./models/DsaSlider');
 const { connectDatabase } = require('./config/database');
 const authService = require('./services/authService');
 
@@ -39,6 +43,8 @@ const allowedOrigins = new Set(
     .map(normalizeOrigin)
     .filter(Boolean),
 );
+const isLocalDevOrigin = (origin) =>
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(normalizeOrigin(origin));
 
 app.use(
   cors({
@@ -52,6 +58,11 @@ app.use(
 
       // Explicitly allowed origins (Render env)
       if (allowedOrigins.has(normalized)) {
+        return callback(null, true);
+      }
+
+      // Allow local frontend dev servers on any port (Vite/Cursor/preview)
+      if (isLocalDevOrigin(normalized)) {
         return callback(null, true);
       }
 
@@ -90,6 +101,9 @@ app.use('/api/payslip-report', payslipReportRoutes);
 app.use('/api/captcha', captchaConfigRoutes);
 app.use('/api/ip-address', ipAddressConfigRoutes);
 app.use('/api/mac-address', macAddressConfigRoutes);
+app.use('/api/3p-credentials', thirdPartyCredentialRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/dsa-sliders', dsaSliderRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
@@ -98,6 +112,12 @@ app.use((req, res) => {
 async function start() {
   try {
     await connectDatabase();
+    // Cleanup old slot-based unique indexes if present.
+    await Promise.all(
+      ['section_1_country_1_slot_1', 'mediaTab_1_section_1_country_1_slot_1'].map((name) =>
+        DsaSlider.collection.dropIndex(name).catch(() => undefined),
+      ),
+    );
     // eslint-disable-next-line no-console
     console.log('Connected to MongoDB');
     await authService.ensureAdminUser();

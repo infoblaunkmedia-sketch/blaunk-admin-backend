@@ -1,4 +1,5 @@
 const employeeCredentialsService = require('../services/employeeCredentialsService');
+const User = require('../models/User');
 
 async function getDepartmentsController(req, res) {
   try {
@@ -64,6 +65,7 @@ async function saveEmployeeCredentialsController(req, res) {
     ctcPerDay,
     gratuity,
     references = [],
+    employeePhotoUrl,
     employeeDocumentUrl,
   } = req.body || {};
 
@@ -124,8 +126,23 @@ async function saveEmployeeCredentialsController(req, res) {
       ctcPerDay,
       gratuity,
       references,
+      employeePhotoUrl,
       employeeDocumentUrl,
     });
+
+    // Keep login eligibility in sync with HR status: only "Active" can log in.
+    try {
+      const code = String(empCode || '').trim().toUpperCase();
+      if (code) {
+        const nextStatus = String(status || '').trim() === 'Active' ? 'Active' : 'Disabled';
+        await User.updateOne(
+          { username: code, employeeType: 'employee' },
+          { $set: { status: nextStatus } },
+        );
+      }
+    } catch {
+      // do not fail HR save if user sync fails
+    }
 
     return res.status(200).json({ record });
   } catch (error) {
@@ -159,9 +176,37 @@ async function getEmployeeCredentialsController(req, res) {
   }
 }
 
+async function listEmployeeCredentialsController(req, res) {
+  const { q, department, limit } = req.query || {};
+  try {
+    const records = await employeeCredentialsService.listEmployees({ q, department, limit });
+    return res.json({ records });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('listEmployeeCredentials error:', error);
+    return res.status(500).json({ message: 'Failed to list employee credentials.' });
+  }
+}
+
+async function deleteEmployeeCredentialsController(req, res) {
+  const { pan } = req.params || {};
+  if (!pan) return res.status(400).json({ message: 'PAN is required.' });
+  try {
+    const deletedCount = await employeeCredentialsService.deleteByPan(pan);
+    if (!deletedCount) return res.status(404).json({ message: 'Employee credentials not found.' });
+    return res.json({ deleted: true });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('deleteEmployeeCredentials error:', error);
+    return res.status(500).json({ message: 'Failed to delete employee credentials.' });
+  }
+}
+
 module.exports = {
   getDepartmentsController,
+  listEmployeeCredentialsController,
   saveEmployeeCredentialsController,
   getEmployeeCredentialsController,
+  deleteEmployeeCredentialsController,
 };
 

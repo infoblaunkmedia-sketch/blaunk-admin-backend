@@ -8,7 +8,7 @@ const ALLOWED_KEYS = new Set([
   'monthlyLeaves', 'nps', 'esi', 'jobGrade', 'uan', 'pf', 'remarks', 'status', 'exitDate',
   'basicSalary', 'hra', 'lta', 'medicalAllowance', 'cea', 'foodAllowance', 'supplementaryAllowance',
   'mea', 'pTax', 'healthInsurance', 'esiSalary', 'pfContribution', 'npsEmployer', 'npsEmployee',
-  'roundOff', 'ctcMonthly', 'ctcPerDay', 'gratuity', 'references', 'employeeDocumentUrl',
+  'roundOff', 'ctcMonthly', 'ctcPerDay', 'gratuity', 'references', 'employeePhotoUrl', 'employeeDocumentUrl',
 ]);
 
 /**
@@ -30,9 +30,10 @@ async function upsertEmployeeCredentialsMongo(payload) {
   if (!payload || !payload.pan) {
     throw new Error('PAN is required for upsert');
   }
-  const toSet = cleanPayload(payload);
+  const normalizedPan = String(payload.pan || '').trim().toUpperCase();
+  const toSet = cleanPayload({ ...payload, pan: normalizedPan });
   const record = await EmployeeCredentials.findOneAndUpdate(
-    { pan: payload.pan },
+    { pan: normalizedPan },
     { $set: toSet },
     {
       returnDocument: 'after',
@@ -46,13 +47,43 @@ async function upsertEmployeeCredentialsMongo(payload) {
 }
 
 async function getEmployeeCredentialsByPanMongo(pan) {
-  const record = await EmployeeCredentials.findOne({ pan }).lean();
+  const normalizedPan = String(pan || '').trim().toUpperCase();
+  const record = await EmployeeCredentials.findOne({ pan: normalizedPan }).lean();
   return record;
 }
 
 async function getDistinctDepartments() {
   const departments = await EmployeeCredentials.distinct('department');
   return (departments || []).filter((d) => d != null && String(d).trim() !== '');
+}
+
+async function listEmployees({ q, department, limit = 200 } = {}) {
+  const query = {};
+  if (department) query.department = String(department).trim();
+  if (q && String(q).trim()) {
+    const needle = String(q).trim();
+    query.$or = [
+      { empCode: { $regex: needle, $options: 'i' } },
+      { employeeName: { $regex: needle, $options: 'i' } },
+      { pan: { $regex: needle, $options: 'i' } },
+      { mobile: { $regex: needle, $options: 'i' } },
+      { email: { $regex: needle, $options: 'i' } },
+    ];
+  }
+
+  const safeLimit = Math.min(Math.max(parseInt(String(limit), 10) || 200, 1), 1000);
+  const list = await EmployeeCredentials.find(query)
+    .sort({ updatedAt: -1 })
+    .limit(safeLimit)
+    .lean();
+  return list || [];
+}
+
+async function deleteByPan(pan) {
+  const normalizedPan = String(pan || '').trim().toUpperCase();
+  if (!normalizedPan) throw new Error('PAN is required');
+  const res = await EmployeeCredentials.deleteOne({ pan: normalizedPan });
+  return res.deletedCount || 0;
 }
 
 /**
@@ -87,6 +118,8 @@ module.exports = {
   upsertEmployeeCredentials,
   getEmployeeCredentialsByPan,
   getDistinctDepartments,
+  listEmployees,
+  deleteByPan,
   listForReport,
 };
 

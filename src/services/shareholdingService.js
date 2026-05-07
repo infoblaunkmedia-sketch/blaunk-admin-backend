@@ -59,6 +59,33 @@ async function getShareholdingByPanMongo(pan) {
   return record;
 }
 
+async function listShareholdings({ q, limit = 200 } = {}) {
+  const query = {};
+  if (q && String(q).trim()) {
+    const needle = String(q).trim();
+    query.$or = [
+      { pan: { $regex: needle, $options: 'i' } },
+      { name: { $regex: needle, $options: 'i' } },
+      { folioNumber: { $regex: needle, $options: 'i' } },
+      { mobile: { $regex: needle, $options: 'i' } },
+      { email: { $regex: needle, $options: 'i' } },
+    ];
+  }
+  const safeLimit = Math.min(Math.max(parseInt(String(limit), 10) || 200, 1), 1000);
+  const list = await Shareholding.find(query)
+    .sort({ updatedAt: -1 })
+    .limit(safeLimit)
+    .lean();
+  return list || [];
+}
+
+async function deleteByPan(pan) {
+  const normalizedPan = String(pan || '').trim().toUpperCase();
+  if (!normalizedPan) throw new Error('PAN is required');
+  const res = await Shareholding.deleteOne({ pan: normalizedPan });
+  return res.deletedCount || 0;
+}
+
 async function upsertShareholding(payload) {
   return upsertShareholdingMongo(payload);
 }
@@ -140,6 +167,8 @@ module.exports = {
   upsertShareholding,
   getShareholdingByPan,
   getCombinedByPan,
+  listShareholdings,
+  deleteByPan,
   listShareholdingMISRows,
   fyMonthToUtcRange,
 };

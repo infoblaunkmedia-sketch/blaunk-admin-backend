@@ -14,7 +14,7 @@ const SECURITY_CODES = [
   'Retail Shop',
   'DSA',
   'Verifier',
-  'C & D MANAGEMENT',
+  'RETAIL MANAGEMENT',
 ];
 
 async function getAll() {

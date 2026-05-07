@@ -1,4 +1,5 @@
 const ipWhitelistService = require('../services/ipWhitelistService');
+const authService = require('../services/authService');
 
 /**
  * Extracts the client's real IP from the request.
@@ -25,37 +26,68 @@ function getClientIp(req) {
   return '';
 }
 
-/** Paths that bypass IP whitelist (bootstrap and health checks). */
-const BYPASS_PATHS = ['/health', '/admin'];
+function requestPathname(req) {
+  const raw = typeof req.originalUrl === 'string' ? req.originalUrl : req.url || '';
+  const [pathname] = raw.split('?');
+  return pathname || '/';
+}
 
-function shouldBypassWhitelist(path) {
-  if (!path) return false;
-  if (BYPASS_PATHS.includes(path)) return true;
-  if (path.startsWith('/admin/')) return true;
+/**
+ * Bypass IP restrictions for admin-only login URL (no Bearer yet).
+ * All other traffic for signed-in admins uses Bearer + role bypass below.
+ */
+function shouldBypassWhitelist(req) {
+  const path = requestPathname(req);
+  const method = (req.method || 'GET').toUpperCase();
+
+  if (path === '/health') return true;
+  if (path === '/admin' || path.startsWith('/admin/')) return true;
+
+  // Auth endpoints are handled explicitly (admin + 3PC bypass, employee enforced in controller)
+  if (path === '/api/auth/login' && method === 'POST') return true;
+  if (path === '/api/auth/admin/login' && method === 'POST') return true;
+  if (path === '/api/auth/forgot-password' && method === 'POST') return true;
+  if (path === '/api/auth/reset-password' && method === 'POST') return true;
+
   return false;
 }
 
 /**
- * Middleware: allow request only if the client IP is in the allowed_ips table.
- * Bypasses check for /health and /admin/* so the whitelist can be managed.
- * If the list is empty, allow all (bootstrap). Otherwise return 403 if IP not allowed.
+ * Apply office IP whitelist ONLY for internal employees.
+ * - Admin: bypass
+ * - 3P employees: bypass
+ * - Employees/DSA: enforced
+ */
+async function getBearerUser(req) {
+  const header = req.headers.authorization;
+  if (!header || !header.toLowerCase().startsWith('bearer ')) return null;
+  const token = header.slice(7);
+  try {
+    return await authService.verifyToken(token);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Middleware: office IP whitelist for API traffic (see ipWhitelistService).
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  * @param {import('express').NextFunction} next
  */
 async function checkIPWhitelist(req, res, next) {
-  if (shouldBypassWhitelist(req.path)) {
+  if (shouldBypassWhitelist(req)) {
     return next();
   }
-  try {
-    const clientIp = getClientIp(req);
-    const allowed = await ipWhitelistService.isIpAllowed(clientIp);
-    const list = await ipWhitelistService.getAllowedIps();
 
-    if (list.length === 0) {
-      return next();
-    }
-    if (!allowed) {
+  try {
+    const bearerUser = await getBearerUser(req);
+    if (bearerUser?.role === 'admin') return next();
+    if (String(bearerUser?.employeeType || '').toLowerCase() === '3pc') return next();
+
+    const clientIp = getClientIp(req);
+    const permitted = await ipWhitelistService.isRequestAllowed(clientIp);
+    if (!permitted) {
       return res.status(403).json({
         message: 'Access Denied: Unauthorized IP',
       });
@@ -72,5 +104,5 @@ module.exports = {
   getClientIp,
   checkIPWhitelist,
   shouldBypassWhitelist,
-  BYPASS_PATHS,
+  requestPathname,
 };
