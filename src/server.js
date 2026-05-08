@@ -47,7 +47,6 @@ process.on('unhandledRejection', (reason) => {
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
-
 const path = require('path');
 const { checkIPWhitelist } = require('./middleware/checkIPWhitelist');
 const authRoutes = require('./routes/authRoutes');
