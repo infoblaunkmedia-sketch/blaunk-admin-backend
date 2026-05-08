@@ -1,10 +1,5 @@
 const EmployeeCredentials = require('../models/EmployeeCredentials');
-
-// 3PC codes: no separate DB collection yet, keep mock or extend when 3P credentials are stored
-const THREE_PC_EMPLOYEE_CODES = [
-  { id: '3PC001', code: '3PC001', name: 'Ravi Kumar' },
-  { id: '3PC002', code: '3PC002', name: 'Priya Singh' },
-];
+const ThirdPartyCredential = require('../models/ThirdPartyCredential');
 
 /**
  * List employee codes from database (EmployeeCredentials).
@@ -31,9 +26,34 @@ async function listEmployeeCodesFromDb() {
   return Array.from(byCode.values()).sort((a, b) => a.code.localeCompare(b.code));
 }
 
+/**
+ * List 3PC codes from database (ThirdPartyCredential).
+ * Returns distinct threePEmplCode + name; one entry per code.
+ */
+async function listThreePcCodesFromDb() {
+  const docs = await ThirdPartyCredential.find(
+    { threePEmplCode: { $exists: true, $ne: null, $ne: '' } },
+    { threePEmplCode: 1, name: 1 },
+  )
+    .sort({ updatedAt: -1 })
+    .lean();
+
+  const byCode = new Map();
+  for (const d of docs) {
+    const code = (d.threePEmplCode && String(d.threePEmplCode).trim().toUpperCase()) || '';
+    if (!code || byCode.has(code)) continue;
+    byCode.set(code, {
+      id: code,
+      code,
+      name: (d.name && String(d.name).trim()) || code,
+    });
+  }
+  return Array.from(byCode.values()).sort((a, b) => a.code.localeCompare(b.code));
+}
+
 async function listEmployeeCodes(type) {
   if (type === '3pc') {
-    return THREE_PC_EMPLOYEE_CODES;
+    return listThreePcCodesFromDb();
   }
   return listEmployeeCodesFromDb();
 }
