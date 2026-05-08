@@ -1,8 +1,16 @@
 require('dotenv').config();
 
 const LOG_PREFIX = '[blaunk-admin-backend]';
+const { syncLine, syncRaw } = require('./utils/syncLog');
 
 process.on('uncaughtException', (err) => {
+  syncLine(LOG_PREFIX, 'uncaughtException', {
+    message: err?.message || String(err),
+    name: err?.name,
+  });
+  if (err?.stack) {
+    syncRaw(err.stack);
+  }
   // eslint-disable-next-line no-console
   console.error(`${LOG_PREFIX} uncaughtException`, err?.message || err);
   if (err?.stack) {
@@ -12,12 +20,25 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 process.on('unhandledRejection', (reason) => {
-  const r = reason;
+  const msg =
+    reason && typeof reason === 'object' && 'message' in reason
+      ? reason.message
+      : typeof reason === 'string'
+        ? reason
+        : String(reason);
+  syncLine(LOG_PREFIX, 'unhandledRejection', {
+    message: msg,
+    name: reason?.name,
+    code: reason?.code,
+  });
+  if (reason?.stack) {
+    syncRaw(reason.stack);
+  }
   // eslint-disable-next-line no-console
-  console.error(`${LOG_PREFIX} unhandledRejection`, r?.message || r);
-  if (r?.stack) {
+  console.error(`${LOG_PREFIX} unhandledRejection`, msg);
+  if (reason?.stack) {
     // eslint-disable-next-line no-console
-    console.error(r.stack);
+    console.error(reason.stack);
   }
   process.exit(1);
 });
@@ -147,12 +168,17 @@ function logStartupEnvironment() {
 }
 
 function logErrorDetail(label, error) {
-  // eslint-disable-next-line no-console
-  console.error(`${LOG_PREFIX} ${label}`, {
+  const meta = {
     name: error?.name,
     message: error?.message || String(error),
     code: error?.code,
-  });
+  };
+  syncLine(LOG_PREFIX, label, meta);
+  if (error?.stack) {
+    syncRaw(error.stack);
+  }
+  // eslint-disable-next-line no-console
+  console.error(`${LOG_PREFIX} ${label}`, meta);
   if (error?.stack) {
     // eslint-disable-next-line no-console
     console.error(error.stack);

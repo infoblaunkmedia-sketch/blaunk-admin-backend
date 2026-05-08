@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { syncLine, syncRaw } = require('../utils/syncLog');
 
 // Single MongoDB configuration + connection helper for the project.
 // Database name is included directly in the MONGO_URI, so there is
@@ -27,14 +28,16 @@ async function connectDatabase() {
     ? process.env.MONGO_URI?.trim()
     : MONGO_URI;
 
-  // eslint-disable-next-line no-console
-  console.log(`${LOG_PREFIX} DB: connect attempt`, {
+  const attemptMeta = {
     productionLike,
     NODE_ENV: process.env.NODE_ENV,
     RENDER: process.env.RENDER,
     mongoUriFromEnv: Boolean(process.env.MONGO_URI?.trim()),
     target: redactMongoUri(uri || '(missing — will fail)'),
-  });
+  };
+  // eslint-disable-next-line no-console
+  console.log(`${LOG_PREFIX} DB: connect attempt`, attemptMeta);
+  syncLine(LOG_PREFIX, 'DB: connect attempt (stderr)', attemptMeta);
 
   if (!uri) {
     throw new Error(
@@ -43,16 +46,29 @@ async function connectDatabase() {
   }
 
   const t0 = Date.now();
+  const connectOptions = {
+    serverSelectionTimeoutMS: 25_000,
+    connectTimeoutMS: 25_000,
+  };
+  if (process.env.MONGO_PREFER_IPV4 === 'true') {
+    connectOptions.family = 4;
+  }
+  syncLine(LOG_PREFIX, 'DB: calling mongoose.connect', connectOptions);
   try {
-    await mongoose.connect(uri);
+    await mongoose.connect(uri, connectOptions);
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error(`${LOG_PREFIX} DB: mongoose.connect error`, {
+    const meta = {
       name: err?.name,
       code: err?.code,
       message: err?.message,
       reason: err?.reason?.message || err?.reason,
-    });
+    };
+    syncLine(LOG_PREFIX, 'DB: mongoose.connect error', meta);
+    if (err?.stack) {
+      syncRaw(err.stack);
+    }
+    // eslint-disable-next-line no-console
+    console.error(`${LOG_PREFIX} DB: mongoose.connect error`, meta);
     if (err?.stack) {
       // eslint-disable-next-line no-console
       console.error(err.stack);
@@ -60,8 +76,10 @@ async function connectDatabase() {
     throw err;
   }
 
+  const okMeta = { ms: Date.now() - t0 };
+  syncLine(LOG_PREFIX, 'DB: connected OK', okMeta);
   // eslint-disable-next-line no-console
-  console.log(`${LOG_PREFIX} DB: connected OK`, { ms: Date.now() - t0 });
+  console.log(`${LOG_PREFIX} DB: connected OK`, okMeta);
   return mongoose.connection;
 }
 
