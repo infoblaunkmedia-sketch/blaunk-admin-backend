@@ -1,5 +1,27 @@
 require('dotenv').config();
 
+const LOG_PREFIX = '[blaunk-admin-backend]';
+
+process.on('uncaughtException', (err) => {
+  // eslint-disable-next-line no-console
+  console.error(`${LOG_PREFIX} uncaughtException`, err?.message || err);
+  if (err?.stack) {
+    // eslint-disable-next-line no-console
+    console.error(err.stack);
+  }
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  const r = reason;
+  // eslint-disable-next-line no-console
+  console.error(`${LOG_PREFIX} unhandledRejection`, r?.message || r);
+  if (r?.stack) {
+    // eslint-disable-next-line no-console
+    console.error(r.stack);
+  }
+  process.exit(1);
+});
+
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -109,18 +131,48 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
+function logStartupEnvironment() {
+  // eslint-disable-next-line no-console
+  console.log(`${LOG_PREFIX} Startup environment`, {
+    node: process.version,
+    cwd: process.cwd(),
+    PORT: String(PORT),
+    processPortEnv: process.env.PORT,
+    NODE_ENV: process.env.NODE_ENV,
+    RENDER: process.env.RENDER,
+    mongoUriSet: Boolean(process.env.MONGO_URI?.trim()),
+    jwtSecretSet: Boolean(process.env.JWT_SECRET?.trim()),
+    CLIENT_ORIGIN: process.env.CLIENT_ORIGIN || '(using default)',
+  });
+}
+
+function logErrorDetail(label, error) {
+  // eslint-disable-next-line no-console
+  console.error(`${LOG_PREFIX} ${label}`, {
+    name: error?.name,
+    message: error?.message || String(error),
+    code: error?.code,
+  });
+  if (error?.stack) {
+    // eslint-disable-next-line no-console
+    console.error(error.stack);
+  }
+}
+
 async function start() {
+  logStartupEnvironment();
+
+  // eslint-disable-next-line no-console
+  console.log(`${LOG_PREFIX} Step 1/3: MongoDB connection...`);
   try {
     await connectDatabase();
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error(
-      'Database connection failed:',
-      error && error.message ? error.message : error,
-    );
+    logErrorDetail('Step 1 FAILED (database connection)', error);
     process.exit(1);
   }
 
+  // eslint-disable-next-line no-console
+  console.log(`${LOG_PREFIX} Step 2/3: index cleanup + ensureAdminUser...`);
   try {
     // Cleanup old slot-based unique indexes if present.
     await Promise.all(
@@ -128,21 +180,27 @@ async function start() {
         DsaSlider.collection.dropIndex(name).catch(() => undefined),
       ),
     );
-    // eslint-disable-next-line no-console
-    console.log('Connected to MongoDB');
     await authService.ensureAdminUser();
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error(
-      'Startup failed after DB connect:',
-      error && error.message ? error.message : error,
-    );
+    logErrorDetail('Step 2 FAILED (post-connect startup)', error);
     process.exit(1);
   }
 
   // eslint-disable-next-line no-console
-  app.listen(PORT, () => console.log(`Auth server listening on port ${PORT}`));
+  console.log(`${LOG_PREFIX} Step 3/3: HTTP listen on port ${PORT}...`);
+  try {
+    app.listen(PORT, () => {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Listening on port ${PORT}`);
+    });
+  } catch (error) {
+    logErrorDetail('Step 3 FAILED (HTTP bind)', error);
+    process.exit(1);
+  }
 }
 
-start();
+start().catch((error) => {
+  logErrorDetail('Fatal: unhandled error in start()', error);
+  process.exit(1);
+});
 
