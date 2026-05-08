@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "build": "echo \"No build step configured for backend\""
+    "build": "node scripts/check-syntax.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
