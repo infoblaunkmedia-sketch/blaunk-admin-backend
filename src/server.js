@@ -19,6 +19,7 @@ process.on('uncaughtException', (err) => {
   }
   process.exit(1);
 });
+
 process.on('unhandledRejection', (reason) => {
   const msg =
     reason && typeof reason === 'object' && 'message' in reason
