@@ -5,14 +5,26 @@ const mongoose = require('mongoose');
 // no need for a separate variable.
 
 const MONGO_URI =
-  process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/blaunk';
+  process.env.MONGO_URI?.trim() || 'mongodb://127.0.0.1:27017/blaunk';
+
+function isProductionLike() {
+  return (
+    process.env.NODE_ENV === 'production' || process.env.RENDER === 'true'
+  );
+}
 
 async function connectDatabase() {
-  if (!MONGO_URI) {
-    throw new Error('MONGO_URI is not configured');
+  const uri = isProductionLike()
+    ? process.env.MONGO_URI?.trim()
+    : MONGO_URI;
+
+  if (!uri) {
+    throw new Error(
+      'MONGO_URI is required in production. In Render: Environment → add MONGO_URI (e.g. MongoDB Atlas connection string).',
+    );
   }
 
-  await mongoose.connect(MONGO_URI);
+  await mongoose.connect(uri);
   return mongoose.connection;
 }
 

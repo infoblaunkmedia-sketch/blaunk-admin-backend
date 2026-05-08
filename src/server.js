@@ -112,6 +112,16 @@ app.use((req, res) => {
 async function start() {
   try {
     await connectDatabase();
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error(
+      'Database connection failed:',
+      error && error.message ? error.message : error,
+    );
+    process.exit(1);
+  }
+
+  try {
     // Cleanup old slot-based unique indexes if present.
     await Promise.all(
       ['section_1_country_1_slot_1', 'mediaTab_1_section_1_country_1_slot_1'].map((name) =>
@@ -123,7 +133,10 @@ async function start() {
     await authService.ensureAdminUser();
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.error('MongoDB connection failed:', error);
+    console.error(
+      'Startup failed after DB connect:',
+      error && error.message ? error.message : error,
+    );
     process.exit(1);
   }
 
