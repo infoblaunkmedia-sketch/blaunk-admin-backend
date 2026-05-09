@@ -3,6 +3,8 @@ const shareholdingService = require('../services/shareholdingService');
 
 async function saveShareholdingController(req, res) {
   const {
+    historyId,
+    projectKey,
     pan,
     name,
     mobile,
@@ -41,7 +43,9 @@ async function saveShareholdingController(req, res) {
   }
 
   try {
-    const record = await shareholdingService.upsertShareholding({
+    const result = await shareholdingService.upsertShareholding({
+      historyId,
+      projectKey,
       pan,
       name,
       mobile,
@@ -75,10 +79,22 @@ async function saveShareholdingController(req, res) {
       nominees,
     });
 
-    return res.status(200).json({ record });
+    return res.status(200).json({
+      record: result.record,
+      shareholder: result.shareholder,
+      historyRecord: result.historyRecord,
+      history: result.history,
+    });
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('saveShareholding error:', error);
+    const msg = error?.message || 'Failed to save shareholding record.';
+    if (
+      String(msg).includes('Invalid history') ||
+      String(msg).includes('Another history entry')
+    ) {
+      return res.status(400).json({ message: msg });
+    }
     return res.status(500).json({ message: 'Failed to save shareholding record.' });
   }
 }
@@ -95,7 +111,12 @@ async function getShareholdingController(req, res) {
     if (!combined) {
       return res.status(404).json({ message: 'No shareholding or employee credential found for this PAN.' });
     }
-    return res.json({ record: combined.record, credential: combined.credential });
+    return res.json({
+      shareholder: combined.shareholder,
+      history: combined.history,
+      record: combined.record,
+      credential: combined.credential,
+    });
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('getShareholding error:', error);
@@ -112,6 +133,20 @@ async function listShareholdingsController(req, res) {
     // eslint-disable-next-line no-console
     console.error('listShareholdings error:', error);
     return res.status(500).json({ message: 'Failed to list shareholding records.' });
+  }
+}
+
+async function deleteShareholdingHistoryController(req, res) {
+  const { pan, historyId } = req.params || {};
+  if (!pan || !historyId) return res.status(400).json({ message: 'PAN and history id are required.' });
+  try {
+    const deletedCount = await shareholdingService.deleteHistoryById(pan, historyId);
+    if (!deletedCount) return res.status(404).json({ message: 'History record not found.' });
+    return res.json({ deleted: true });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('deleteShareholdingHistory error:', error);
+    return res.status(500).json({ message: 'Failed to delete history record.' });
   }
 }
 
@@ -233,6 +268,7 @@ module.exports = {
   saveShareholdingController,
   listShareholdingsController,
   getShareholdingController,
+  deleteShareholdingHistoryController,
   deleteShareholdingController,
   exportShareholdingMISController,
 };

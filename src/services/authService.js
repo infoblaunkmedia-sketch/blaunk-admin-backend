@@ -149,6 +149,11 @@ async function resetPasswordWithToken(token, newPassword) {
 
 async function updateOwnProfile(authUser, { email, currentPassword, newPassword } = {}) {
   if (!authUser?.username) throw new Error('Unauthorized');
+  const current = String(currentPassword || '').trim();
+  if (!current) {
+    throw new Error('Current password is required.');
+  }
+
   const nextEmail = String(email || '').trim().toLowerCase();
   const nextPassword = String(newPassword || '').trim();
   const wantsPasswordChange = nextPassword.length > 0;
@@ -162,15 +167,14 @@ async function updateOwnProfile(authUser, { email, currentPassword, newPassword 
     const admin = await Admin.findOne({ username: authUser.username });
     if (!admin) throw new Error('User not found');
 
+    const isMatch = await bcrypt.compare(current, admin.passwordHash);
+    if (!isMatch) throw new Error('Current password is incorrect.');
+
     if (nextEmail) {
       admin.email = nextEmail;
     }
 
     if (wantsPasswordChange) {
-      const current = String(currentPassword || '');
-      if (!current) throw new Error('Current password is required.');
-      const isMatch = await bcrypt.compare(current, admin.passwordHash);
-      if (!isMatch) throw new Error('Current password is incorrect.');
       admin.passwordHash = await bcrypt.hash(nextPassword, 10);
     }
 
@@ -181,15 +185,14 @@ async function updateOwnProfile(authUser, { email, currentPassword, newPassword 
   const user = await User.findOne({ username: authUser.username });
   if (!user) throw new Error('User not found');
 
+  const isMatch = await bcrypt.compare(current, user.passwordHash);
+  if (!isMatch) throw new Error('Current password is incorrect.');
+
   if (nextEmail) {
     user.email = nextEmail;
   }
 
   if (wantsPasswordChange) {
-    const current = String(currentPassword || '');
-    if (!current) throw new Error('Current password is required.');
-    const isMatch = await bcrypt.compare(current, user.passwordHash);
-    if (!isMatch) throw new Error('Current password is incorrect.');
     user.passwordHash = await bcrypt.hash(nextPassword, 10);
     user.passwordResetRequired = false;
     user.lastPasswordChangeAt = new Date();

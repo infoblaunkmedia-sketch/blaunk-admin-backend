@@ -66,6 +66,7 @@ const dsaSliderRoutes = require('./routes/dsaSliderRoutes');
 const DsaSlider = require('./models/DsaSlider');
 const { connectDatabase } = require('./config/database');
 const authService = require('./services/authService');
+const shareholdingService = require('./services/shareholdingService');
 
 const app = express();
 
@@ -207,6 +208,11 @@ async function start() {
       ),
     );
     await authService.ensureAdminUser();
+    const mig = await shareholdingService.migrateLegacyShareholdingsIfNeeded();
+    if (mig.migrated > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Migrated ${mig.migrated} legacy shareholding document(s) to Shareholder + History.`);
+    }
   } catch (error) {
     logErrorDetail('Step 2 FAILED (post-connect startup)', error);
     process.exit(1);

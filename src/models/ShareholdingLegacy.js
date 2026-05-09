@@ -1,5 +1,9 @@
 const mongoose = require('mongoose');
 
+/**
+ * Pre-split collection `shareholdings` — used only to migrate into
+ * Shareholder + ShareholdingHistory. New writes use the new models.
+ */
 const nomineeSchema = new mongoose.Schema(
   {
     name: String,
@@ -11,9 +15,9 @@ const nomineeSchema = new mongoose.Schema(
   { _id: false },
 );
 
-const shareholdingSchema = new mongoose.Schema(
+const shareholdingLegacySchema = new mongoose.Schema(
   {
-    pan: { type: String, required: true, index: true, unique: true },
+    pan: { type: String, required: true, index: true },
     name: String,
     mobile: String,
     email: String,
@@ -45,12 +49,9 @@ const shareholdingSchema = new mongoose.Schema(
     pledge: String,
     nominees: [nomineeSchema],
   },
-  { timestamps: true },
+  { timestamps: true, collection: 'shareholdings' },
 );
 
-const Shareholding =
-  mongoose.models.Shareholding ||
-  mongoose.model('Shareholding', shareholdingSchema);
-
-module.exports = Shareholding;
-
+module.exports =
+  mongoose.models.ShareholdingLegacy ||
+  mongoose.model('ShareholdingLegacy', shareholdingLegacySchema);
