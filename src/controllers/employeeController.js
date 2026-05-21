@@ -16,7 +16,22 @@ async function listEmployeeCodesController(req, res) {
   }
 }
 
+async function nextEmployeeCodeController(req, res) {
+  const { type } = req.query || {};
+  try {
+    const code = await employeeService.getNextEmployeeCode(
+      type === '3pc' ? '3pc' : 'employee',
+    );
+    return res.json({ code });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('nextEmployeeCode error:', error);
+    return res.status(500).json({ message: 'Failed to generate employee code.' });
+  }
+}
+
 module.exports = {
   listEmployeeCodesController,
+  nextEmployeeCodeController,
 };
 

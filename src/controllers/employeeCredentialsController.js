@@ -1,5 +1,6 @@
 const employeeCredentialsService = require('../services/employeeCredentialsService');
 const User = require('../models/User');
+const employeeService = require('../services/employeeService');
 
 async function getDepartmentsController(req, res) {
   try {
@@ -31,8 +32,20 @@ async function saveEmployeeCredentialsController(req, res) {
     designation,
     bankName,
     ifscCode,
+    micrCode,
     bankAccountNumber,
     medicalInsuranceNo,
+    medicalInsurer,
+    gratuityNo,
+    gratuityInsurer,
+    bonus,
+    pfRequest,
+    esiInsuranceNo,
+    npsSubscriptionNo,
+    ctcDivisorDays,
+    pfContributionEmployer,
+    bankArea,
+    bankCity,
     doj,
     doc,
     centreName,
@@ -74,13 +87,15 @@ async function saveEmployeeCredentialsController(req, res) {
   }
 
   try {
+    const normalizedEmpCode = String(empCode || '').trim().toUpperCase()
+      || await employeeService.getNextEmployeeCode('employee');
     const record = await employeeCredentialsService.upsertEmployeeCredentials({
       pan,
       employeeName,
       mobile,
       email,
       aadhaar,
-      empCode,
+      empCode: normalizedEmpCode,
       address,
       city,
       zip,
@@ -92,8 +107,20 @@ async function saveEmployeeCredentialsController(req, res) {
       designation,
       bankName,
       ifscCode,
+      micrCode,
       bankAccountNumber,
       medicalInsuranceNo,
+      medicalInsurer,
+      gratuityNo,
+      gratuityInsurer,
+      bonus,
+      pfRequest,
+      esiInsuranceNo,
+      npsSubscriptionNo,
+      ctcDivisorDays,
+      pfContributionEmployer,
+      bankArea,
+      bankCity,
       doj,
       doc,
       centreName,
@@ -132,7 +159,7 @@ async function saveEmployeeCredentialsController(req, res) {
 
     // Keep login eligibility in sync with HR status: only "Active" can log in.
     try {
-      const code = String(empCode || '').trim().toUpperCase();
+      const code = normalizedEmpCode;
       if (code) {
         const nextStatus = String(status || '').trim() === 'Active' ? 'Active' : 'Disabled';
         await User.updateOne(

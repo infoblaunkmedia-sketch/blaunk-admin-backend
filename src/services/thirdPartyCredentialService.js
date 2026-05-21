@@ -1,4 +1,5 @@
 const ThirdPartyCredential = require('../models/ThirdPartyCredential');
+const employeeService = require('./employeeService');
 
 function cleanStr(v) {
   return v == null ? '' : String(v);
@@ -46,6 +47,18 @@ async function upsertThirdPartyCredential(payload) {
   const body = payload || {};
   if (!body.name || !String(body.name).trim()) throw new Error('Name is required');
 
+  let generatedOrResolved3pCode = cleanStr(body.threePEmplCode).trim().toUpperCase();
+  if (body.id) {
+    const existing = await ThirdPartyCredential.findById(body.id).select('threePEmplCode').lean();
+    if (existing?.threePEmplCode) {
+      generatedOrResolved3pCode = String(existing.threePEmplCode).trim().toUpperCase();
+    } else if (!generatedOrResolved3pCode) {
+      generatedOrResolved3pCode = await employeeService.getNextEmployeeCode('3pc');
+    }
+  } else {
+    generatedOrResolved3pCode = await employeeService.getNextEmployeeCode('3pc');
+  }
+
   const set = {
     department: cleanStr(body.department),
     name: cleanStr(body.name),
@@ -63,7 +76,7 @@ async function upsertThirdPartyCredential(payload) {
     country: cleanStr(body.country),
     state: cleanStr(body.state),
     threePCompanyName: cleanStr(body.threePCompanyName),
-    threePEmplCode: cleanStr(body.threePEmplCode).trim().toUpperCase(),
+    threePEmplCode: generatedOrResolved3pCode,
     threePEntity: cleanStr(body.threePEntity),
     businessCode: cleanStr(body.businessCode),
     branchCode: cleanStr(body.branchCode),

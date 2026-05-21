@@ -29,6 +29,7 @@ const shareholdingHistorySchema = new mongoose.Schema(
     mode: String,
     isinCode: String,
     dpNumber: String,
+    beneficiaryDpId: String,
     folioNumber: String,
     distinctiveFrom: String,
     distinctiveTo: String,

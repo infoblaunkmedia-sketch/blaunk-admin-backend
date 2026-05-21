@@ -63,6 +63,9 @@ const adminIpWhitelistRoutes = require('./routes/adminIpWhitelistRoutes');
 const thirdPartyCredentialRoutes = require('./routes/thirdPartyCredentialRoutes');
 const userRoutes = require('./routes/userRoutes');
 const dsaSliderRoutes = require('./routes/dsaSliderRoutes');
+const mediaSlotConfigRoutes = require('./routes/mediaSlotConfigRoutes');
+const dsaPayoutRoutes = require('./routes/dsaPayoutRoutes');
+const matchCodeRoutes = require('./routes/matchCodeRoutes');
 const DsaSlider = require('./models/DsaSlider');
 const { connectDatabase } = require('./config/database');
 const authService = require('./services/authService');
@@ -148,6 +151,9 @@ app.use('/api/mac-address', macAddressConfigRoutes);
 app.use('/api/3p-credentials', thirdPartyCredentialRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/dsa-sliders', dsaSliderRoutes);
+app.use('/api/media-slot-config', mediaSlotConfigRoutes);
+app.use('/api/dsa-payouts', dsaPayoutRoutes);
+app.use('/api/match-code', matchCodeRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
@@ -203,9 +209,11 @@ async function start() {
   try {
     // Cleanup old slot-based unique indexes if present.
     await Promise.all(
-      ['section_1_country_1_slot_1', 'mediaTab_1_section_1_country_1_slot_1'].map((name) =>
-        DsaSlider.collection.dropIndex(name).catch(() => undefined),
-      ),
+      [
+        'section_1_country_1_slot_1',
+        'mediaTab_1_section_1_country_1_slot_1',
+        'mediaTab_1_section_1_country_1',
+      ].map((name) => DsaSlider.collection.dropIndex(name).catch(() => undefined)),
     );
     await authService.ensureAdminUser();
     const mig = await shareholdingService.migrateLegacyShareholdingsIfNeeded();

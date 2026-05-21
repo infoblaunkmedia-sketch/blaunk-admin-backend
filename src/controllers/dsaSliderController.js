@@ -50,9 +50,9 @@ async function createSliderController(req, res) {
     return res.status(201).json({ record });
   } catch (error) {
     const msg = String(error?.message || '');
-    const status = msg.toLowerCase().includes('required') || msg.toLowerCase().includes('invalid')
-      ? 400
-      : 500;
+    const low = msg.toLowerCase();
+    const status =
+      low.includes('required') || low.includes('invalid') || low.includes('slots are full') ? 400 : 500;
     return res.status(status).json({ message: msg || 'Failed to create slider.' });
   }
 }
@@ -73,10 +73,22 @@ async function updateSliderController(req, res) {
     return res.json({ record });
   } catch (error) {
     const msg = String(error?.message || '');
-    const status = msg.toLowerCase().includes('required') || msg.toLowerCase().includes('invalid')
-      ? 400
-      : 500;
+    const low = msg.toLowerCase();
+    const status =
+      low.includes('required') || low.includes('invalid') || low.includes('slots are full') ? 400 : 500;
     return res.status(status).json({ message: msg || 'Failed to update slider.' });
+  }
+}
+
+async function slotStatusController(req, res) {
+  const { mediaTab, section, country } = req.query || {};
+  try {
+    const status = await dsaSliderService.getSlotStatus({ mediaTab, section, country });
+    return res.json({ status });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('slotStatus error:', error);
+    return res.status(500).json({ message: 'Failed to load slot status.' });
   }
 }
 
@@ -127,5 +139,6 @@ module.exports = {
   deleteSliderController,
   listPublicSlidersBySlotController,
   sliderSummaryController,
+  slotStatusController,
 };
 

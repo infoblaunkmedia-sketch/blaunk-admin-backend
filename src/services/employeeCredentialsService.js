@@ -4,7 +4,9 @@ const EmployeeCredentials = require('../models/EmployeeCredentials');
 const ALLOWED_KEYS = new Set([
   'pan', 'employeeName', 'mobile', 'email', 'aadhaar', 'empCode', 'address', 'city', 'zip',
   'country', 'state', 'gender', 'yearlyCtc', 'department', 'designation', 'bankName', 'ifscCode',
-  'bankAccountNumber', 'medicalInsuranceNo', 'doj', 'doc', 'centreName', 'confirmationStatus',
+  'micrCode', 'bankAccountNumber', 'medicalInsuranceNo', 'medicalInsurer', 'gratuityNo', 'gratuityInsurer',
+  'bonus', 'pfRequest', 'esiInsuranceNo', 'npsSubscriptionNo', 'ctcDivisorDays', 'pfContributionEmployer',
+  'bankArea', 'bankCity', 'doj', 'doc', 'centreName', 'confirmationStatus',
   'monthlyLeaves', 'nps', 'esi', 'jobGrade', 'uan', 'pf', 'remarks', 'status', 'exitDate',
   'basicSalary', 'hra', 'lta', 'medicalAllowance', 'cea', 'foodAllowance', 'supplementaryAllowance',
   'mea', 'pTax', 'healthInsurance', 'esiSalary', 'pfContribution', 'npsEmployer', 'npsEmployee',

@@ -8,6 +8,7 @@ const {
   deleteSliderController,
   listPublicSlidersBySlotController,
   sliderSummaryController,
+  slotStatusController,
 } = require('../controllers/dsaSliderController');
 
 const router = express.Router();
@@ -15,6 +16,7 @@ const router = express.Router();
 // Public consumption endpoint for external projects.
 router.get('/public', listPublicSlidersBySlotController);
 router.get('/summary', authMiddleware, sliderSummaryController);
+router.get('/slot-status', authMiddleware, slotStatusController);
 
 // Authenticated management APIs.
 router.get('/', authMiddleware, listSlidersController);

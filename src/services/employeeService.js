@@ -58,7 +58,29 @@ async function listEmployeeCodes(type) {
   return listEmployeeCodesFromDb();
 }
 
+function nextCodeFromList(codes, prefix, pad = 4) {
+  const max = (codes || []).reduce((acc, item) => {
+    const raw = String(item?.code || '').trim().toUpperCase();
+    const re = new RegExp(`^${prefix}(\\d+)$`);
+    const m = raw.match(re);
+    if (!m) return acc;
+    const n = parseInt(m[1], 10);
+    return Number.isFinite(n) ? Math.max(acc, n) : acc;
+  }, 0);
+  return `${prefix}${String(max + 1).padStart(pad, '0')}`;
+}
+
+async function getNextEmployeeCode(type) {
+  if (type === '3pc') {
+    const list = await listThreePcCodesFromDb();
+    return nextCodeFromList(list, '3PC', 4);
+  }
+  const list = await listEmployeeCodesFromDb();
+  return nextCodeFromList(list, 'E', 4);
+}
+
 module.exports = {
   listEmployeeCodes,
+  getNextEmployeeCode,
 };
 
