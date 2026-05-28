@@ -1,4 +1,7 @@
 const express = require('express');
+const { authMiddleware } = require('../middleware/authMiddleware');
+const { requireAdmin } = require('../middleware/requireRole');
+const { requireSection } = require('../middleware/requirePermission');
 const {
   getMacAddressConfigController,
   addMacAddressConfigController,
@@ -8,9 +11,15 @@ const {
 
 const router = express.Router();
 
-router.get('/', getMacAddressConfigController);
-router.post('/', addMacAddressConfigController);
-router.post('/save-all', saveAllMacAddressConfigController);
-router.delete('/:id', deleteMacAddressConfigController);
+const settingsGuard = [
+  authMiddleware,
+  requireAdmin,
+  requireSection('settings', 'security'),
+];
+
+router.get('/', settingsGuard, getMacAddressConfigController);
+router.post('/', settingsGuard, addMacAddressConfigController);
+router.post('/save-all', settingsGuard, saveAllMacAddressConfigController);
+router.delete('/:id', settingsGuard, deleteMacAddressConfigController);
 
 module.exports = router;

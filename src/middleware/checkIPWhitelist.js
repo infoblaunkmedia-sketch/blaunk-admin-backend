@@ -49,6 +49,18 @@ function shouldBypassWhitelist(req) {
   if (path === '/api/auth/forgot-password' && method === 'POST') return true;
   if (path === '/api/auth/reset-password' && method === 'POST') return true;
 
+  if (path.startsWith('/api/products/public')) return true;
+  if (path.startsWith('/api/categories/public')) return true;
+  if (path.startsWith('/api/banners/public')) return true;
+  if (path.startsWith('/api/giff/public')) return true;
+  if (path.startsWith('/api/site-media/public')) return true;
+  if (path.startsWith('/api/testimonials/public')) return true;
+  if (path === '/api/testimonials' && method === 'GET') return true;
+  if (path === '/api/referrals/track' && method === 'POST') return true;
+  if (path.startsWith('/api/dsa-sliders/public')) return true;
+  if (path.startsWith('/api/shops/public')) return true;
+  if (path === '/api/shops/register' && method === 'POST') return true;
+  if (path.startsWith('/api/shop-categories/public')) return true;
   return false;
 }
 

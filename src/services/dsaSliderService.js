@@ -102,11 +102,12 @@ function normalizePayload(payload, prev = null) {
   return { mediaTab, imageUrl, section, country, category, plan, productId, matchCode, planCharge, luxuryFees, discount, toPay, status, uploadDate, expiryDate };
 }
 
-async function listSliders({ mediaTab, section, country, status, q, limit = 200 } = {}) {
+async function listSliders({ mediaTab, section, country, status, q, dsaCode, limit = 200 } = {}) {
   const query = {};
   if (cleanString(mediaTab)) query.mediaTab = cleanString(mediaTab);
   if (cleanString(section)) query.section = cleanString(section).toUpperCase();
   if (cleanString(country)) query.country = cleanString(country);
+  if (cleanString(dsaCode)) query.dsaCode = cleanString(dsaCode).toUpperCase();
   if (cleanString(status) && ALLOWED_STATUSES.has(cleanString(status))) query.status = cleanString(status);
   if (cleanString(q)) {
     const needle = cleanString(q);

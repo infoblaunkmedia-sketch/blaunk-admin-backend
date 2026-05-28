@@ -1,5 +1,8 @@
 const express = require('express');
 const { authMiddleware } = require('../middleware/authMiddleware');
+const { requireRole, ROLES } = require('../middleware/requireRole');
+const { requireSectionOr3p } = require('../middleware/requirePermission');
+const { scopeDsaCodeQuery } = require('../middleware/scopeOwnResource');
 const {
   listSlidersController,
   getSliderController,
@@ -13,17 +16,27 @@ const {
 
 const router = express.Router();
 
-// Public consumption endpoint for external projects.
+// Public consumption endpoint for external projects (no auth).
 router.get('/public', listPublicSlidersBySlotController);
-router.get('/summary', authMiddleware, sliderSummaryController);
-router.get('/slot-status', authMiddleware, slotStatusController);
 
-// Authenticated management APIs.
-router.get('/', authMiddleware, listSlidersController);
-router.post('/', authMiddleware, createSliderController);
-router.get('/:id', authMiddleware, getSliderController);
-router.put('/:id', authMiddleware, updateSliderController);
-router.delete('/:id', authMiddleware, deleteSliderController);
+const sliderRead = [
+  authMiddleware,
+  requireRole(ROLES.ADMIN, ROLES.EMP, ROLES.THREE_P),
+  requireSectionOr3p('marketing', 'media-ads'),
+];
+
+const sliderWrite = [
+  authMiddleware,
+  requireRole(ROLES.ADMIN, ROLES.THREE_P),
+  requireSectionOr3p('marketing', 'media-ads'),
+];
+
+router.get('/summary', sliderRead, scopeDsaCodeQuery, sliderSummaryController);
+router.get('/slot-status', sliderRead, slotStatusController);
+router.get('/', sliderRead, scopeDsaCodeQuery, listSlidersController);
+router.post('/', sliderWrite, createSliderController);
+router.get('/:id', sliderRead, getSliderController);
+router.put('/:id', sliderWrite, updateSliderController);
+router.delete('/:id', sliderWrite, deleteSliderController);
 
 module.exports = router;
-

@@ -1,4 +1,7 @@
 const express = require('express');
+const { authMiddleware } = require('../middleware/authMiddleware');
+const { requireAdmin } = require('../middleware/requireRole');
+const { requireSection } = require('../middleware/requirePermission');
 const {
   getCaptchaConfigController,
   saveCaptchaConfigController,
@@ -6,7 +9,13 @@ const {
 
 const router = express.Router();
 
-router.get('/', getCaptchaConfigController);
-router.post('/', saveCaptchaConfigController);
+const settingsGuard = [
+  authMiddleware,
+  requireAdmin,
+  requireSection('settings', 'security'),
+];
+
+router.get('/', settingsGuard, getCaptchaConfigController);
+router.post('/', settingsGuard, saveCaptchaConfigController);
 
 module.exports = router;

@@ -1,17 +1,23 @@
 const express = require('express');
 const { authMiddleware } = require('../middleware/authMiddleware');
-const { requireAdmin } = require('../middleware/requireAdmin');
+const { requireRole, ROLES } = require('../middleware/requireRole');
+const { requireSection } = require('../middleware/requirePermission');
 const {
-  getUserByCodeController,
-  patchUserStatusController,
-  generateTempPasswordController,
-} = require('../controllers/userAdminController');
+  listIndividualsController,
+  getIndividualController,
+  patchIndividualStatusController,
+} = require('../controllers/individualCustomerController');
 
 const router = express.Router();
 
-router.get('/:code', authMiddleware, requireAdmin, getUserByCodeController);
-router.patch('/:code/status', authMiddleware, requireAdmin, patchUserStatusController);
-router.post('/:code/temp-password', authMiddleware, requireAdmin, generateTempPasswordController);
+const b2cGuard = [
+  authMiddleware,
+  requireRole(ROLES.ADMIN, ROLES.EMP),
+  requireSection('customers', 'individuals'),
+];
+
+router.get('/', b2cGuard, listIndividualsController);
+router.get('/:id', b2cGuard, getIndividualController);
+router.patch('/:id/status', b2cGuard, patchIndividualStatusController);
 
 module.exports = router;
-

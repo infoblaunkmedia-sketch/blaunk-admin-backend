@@ -2,15 +2,20 @@ const Rights = require('../models/Rights');
 const macAddressConfigService = require('./macAddressConfigService');
 
 const ALL_SECTIONS = [
-  // Frontend module permissions (sidebar/routes)
   'dashboard',
   'cms',
+  'cms:banners',
   'people',
   'channelPartners',
+  'channelPartners:dsa',
   'finance',
   'platform',
+  'platform:products',
+  'platform:categories',
   'marketing',
   'customers',
+  'customers:orders',
+  'customers:vendors',
   'reports',
   'corporate',
   'settings',

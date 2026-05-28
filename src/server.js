@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const LOG_PREFIX = '[blaunk-admin-backend]';
 const { syncLine, syncRaw } = require('./utils/syncLog');
@@ -47,7 +48,6 @@ process.on('unhandledRejection', (reason) => {
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
-const path = require('path');
 const { checkIPWhitelist } = require('./middleware/checkIPWhitelist');
 const authRoutes = require('./routes/authRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
@@ -62,10 +62,32 @@ const macAddressConfigRoutes = require('./routes/macAddressConfigRoutes');
 const adminIpWhitelistRoutes = require('./routes/adminIpWhitelistRoutes');
 const thirdPartyCredentialRoutes = require('./routes/thirdPartyCredentialRoutes');
 const userRoutes = require('./routes/userRoutes');
+const staffUserRoutes = require('./routes/staffUserRoutes');
+const individualCustomerService = require('./services/individualCustomerService');
+const sellerService = require('./services/sellerService');
+const sellerRoutes = require('./routes/sellerRoutes');
 const dsaSliderRoutes = require('./routes/dsaSliderRoutes');
 const mediaSlotConfigRoutes = require('./routes/mediaSlotConfigRoutes');
 const dsaPayoutRoutes = require('./routes/dsaPayoutRoutes');
 const matchCodeRoutes = require('./routes/matchCodeRoutes');
+const productRoutes = require('./routes/productRoutes');
+const categoryRoutes = require('./routes/categoryRoutes');
+const orderRoutes = require('./routes/orderRoutes');
+const referralRoutes = require('./routes/referralRoutes');
+const bannerRoutes = require('./routes/bannerRoutes');
+const giffRoutes = require('./routes/giffRoutes');
+const shopRoutes = require('./routes/shopRoutes');
+const shopCategoryRoutes = require('./routes/shopCategoryRoutes');
+const shopService = require('./services/shopService');
+const shopCategoryService = require('./services/shopCategoryService');
+const siteMediaRoutes = require('./routes/siteMediaRoutes');
+const testimonialRoutes = require('./routes/testimonialRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
+const categoryService = require('./services/categoryService');
+const productService = require('./services/productService');
+const orderService = require('./services/orderService');
+const referralService = require('./services/referralService');
+const bannerService = require('./services/bannerService');
 const DsaSlider = require('./models/DsaSlider');
 const { connectDatabase } = require('./config/database');
 const authService = require('./services/authService');
@@ -84,6 +106,7 @@ function normalizeOrigin(value) {
 const allowedOrigins = new Set(
   [
     CLIENT_ORIGIN,
+    'http://192.168.0.64:5173',
     'http://localhost:5175',
     ...(CLIENT_ORIGINS ? CLIENT_ORIGINS.split(',') : []),
   ]
@@ -150,10 +173,24 @@ app.use('/api/ip-address', ipAddressConfigRoutes);
 app.use('/api/mac-address', macAddressConfigRoutes);
 app.use('/api/3p-credentials', thirdPartyCredentialRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/staff-users', staffUserRoutes);
+app.use('/api/sellers', sellerRoutes);
 app.use('/api/dsa-sliders', dsaSliderRoutes);
 app.use('/api/media-slot-config', mediaSlotConfigRoutes);
 app.use('/api/dsa-payouts', dsaPayoutRoutes);
 app.use('/api/match-code', matchCodeRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/referrals', referralRoutes);
+app.use('/api/banners', bannerRoutes);
+app.use('/api/giff', giffRoutes);
+app.use('/api/shops', shopRoutes);
+app.use('/api/shop-categories', shopCategoryRoutes);
+app.use('/api/admin-personnel/media', siteMediaRoutes);
+app.use('/api/site-media', siteMediaRoutes);
+app.use('/api/testimonials', testimonialRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
@@ -170,6 +207,11 @@ function logStartupEnvironment() {
     RENDER: process.env.RENDER,
     mongoUriSet: Boolean(process.env.MONGO_URI?.trim()),
     jwtSecretSet: Boolean(process.env.JWT_SECRET?.trim()),
+    cloudinarySet: Boolean(
+      process.env.CLOUDINARY_CLOUD_NAME?.trim()
+        && process.env.CLOUDINARY_API_KEY?.trim()
+        && process.env.CLOUDINARY_API_SECRET?.trim(),
+    ),
     CLIENT_ORIGIN: process.env.CLIENT_ORIGIN || '(using default)',
   });
 }
@@ -216,6 +258,31 @@ async function start() {
       ].map((name) => DsaSlider.collection.dropIndex(name).catch(() => undefined)),
     );
     await authService.ensureAdminUser();
+    const seed = await individualCustomerService.ensureSeedIndividualsIfEmpty();
+    if (seed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${seed.seeded} sample B2C customer(s).`);
+    }
+    const sellerSeed = await sellerService.ensureSeedSellersIfEmpty();
+    if (sellerSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${sellerSeed.seeded} sample seller(s).`);
+    }
+    await categoryService.ensureSeedCategories();
+    await productService.ensureSeedProducts();
+    await orderService.ensureSeedOrders();
+    await referralService.ensureSeedReferrals();
+    await bannerService.ensureSeedBanners();
+    const catSeed = await shopCategoryService.ensureSeedCategoriesIfEmpty();
+    if (catSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${catSeed.seeded} B-Store categor(ies).`);
+    }
+    const shopSeed = await shopService.ensureSeedShopsIfEmpty();
+    if (shopSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${shopSeed.seeded} B-Store shop(s).`);
+    }
     const mig = await shareholdingService.migrateLegacyShareholdingsIfNeeded();
     if (mig.migrated > 0) {
       // eslint-disable-next-line no-console

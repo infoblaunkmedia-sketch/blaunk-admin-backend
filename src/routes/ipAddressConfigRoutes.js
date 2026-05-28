@@ -1,4 +1,7 @@
 const express = require('express');
+const { authMiddleware } = require('../middleware/authMiddleware');
+const { requireAdmin } = require('../middleware/requireRole');
+const { requireSection } = require('../middleware/requirePermission');
 const {
   getIpAddressConfigController,
   addIpAddressConfigController,
@@ -8,9 +11,15 @@ const {
 
 const router = express.Router();
 
-router.get('/', getIpAddressConfigController);
-router.post('/', addIpAddressConfigController);
-router.post('/save-all', saveAllIpAddressConfigController);
-router.delete('/:id', deleteIpAddressConfigController);
+const settingsGuard = [
+  authMiddleware,
+  requireAdmin,
+  requireSection('settings', 'security'),
+];
+
+router.get('/', settingsGuard, getIpAddressConfigController);
+router.post('/', settingsGuard, addIpAddressConfigController);
+router.post('/save-all', settingsGuard, saveAllIpAddressConfigController);
+router.delete('/:id', settingsGuard, deleteIpAddressConfigController);
 
 module.exports = router;

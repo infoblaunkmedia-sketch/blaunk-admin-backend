@@ -5,11 +5,19 @@ const {
   getMyRightsController,
 } = require('../controllers/rightsController');
 const { authMiddleware } = require('../middleware/authMiddleware');
+const { requireAdmin } = require('../middleware/requireRole');
+const { requireSection } = require('../middleware/requirePermission');
 
 const router = express.Router();
 
-router.post('/', saveRightsController);
+router.post(
+  '/',
+  authMiddleware,
+  requireAdmin,
+  requireSection('settings', 'rights'),
+  saveRightsController,
+);
 router.get('/me', authMiddleware, getMyRightsController);
-router.get('/:type/:code', getRightsController);
+router.get('/:type/:code', authMiddleware, requireAdmin, getRightsController);
 
 module.exports = router;

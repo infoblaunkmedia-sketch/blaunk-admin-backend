@@ -12,6 +12,9 @@ async function authMiddleware(req, res, next) {
   try {
     const user = await authService.verifyToken(token);
     req.user = user;
+    const { normalizeAuthRole, getSubjectCode } = require('./requireRole');
+    req.authRole = normalizeAuthRole(user);
+    req.subjectCode = getSubjectCode(user);
     return next();
   } catch (error) {
     // eslint-disable-next-line no-console

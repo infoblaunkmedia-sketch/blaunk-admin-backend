@@ -1,4 +1,7 @@
 const express = require('express');
+const { authMiddleware } = require('../middleware/authMiddleware');
+const { requireRole, ROLES } = require('../middleware/requireRole');
+const { requireSection } = require('../middleware/requirePermission');
 const {
   saveShareholdingController,
   listShareholdingsController,
@@ -10,23 +13,17 @@ const {
 
 const router = express.Router();
 
-// List shareholding records (must be before /:pan)
-router.get('/', listShareholdingsController);
+const corporateGuard = [
+  authMiddleware,
+  requireRole(ROLES.ADMIN, ROLES.EMP),
+  requireSection('corporate', 'shareholding'),
+];
 
-// Save or update shareholding info (including nominees) for a given PAN
-router.post('/', saveShareholdingController);
-
-// MIS export: shareholding + HR credential columns (Excel)
-router.post('/mis-export', exportShareholdingMISController);
-
-// Delete one year/project history row (shareholder kept if other rows exist)
-router.delete('/:pan/history/:historyId', deleteShareholdingHistoryController);
-
-// Fetch shareholding + employee credential (same PAN) for aligned master data
-router.get('/:pan', getShareholdingController);
-
-// Delete shareholder and all history by PAN
-router.delete('/:pan', deleteShareholdingController);
+router.get('/', corporateGuard, listShareholdingsController);
+router.post('/', corporateGuard, saveShareholdingController);
+router.post('/mis-export', corporateGuard, exportShareholdingMISController);
+router.delete('/:pan/history/:historyId', corporateGuard, deleteShareholdingHistoryController);
+router.get('/:pan', corporateGuard, getShareholdingController);
+router.delete('/:pan', corporateGuard, deleteShareholdingController);
 
 module.exports = router;
-

@@ -1,8 +1,4 @@
-function requireAdmin(req, res, next) {
-  if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Forbidden' });
-  return next();
-}
+/** @deprecated Import { requireAdmin } from './requireRole' instead. */
+const { requireAdmin } = require('./requireRole');
 
 module.exports = { requireAdmin };
-

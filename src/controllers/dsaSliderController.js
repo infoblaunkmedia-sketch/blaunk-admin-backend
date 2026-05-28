@@ -1,20 +1,37 @@
 const dsaSliderService = require('../services/dsaSliderService');
-
-function actorFromReq(req) {
-  return String(req.user?.username || req.user?.id || 'system');
-}
+const {
+  isAdminUser,
+  is3pUser,
+  getSubjectCode,
+} = require('../middleware/requireRole');
 
 function isAllowedManager(req) {
-  const role = String(req.user?.role || '').toLowerCase();
-  if (role === 'admin') return true;
-  const type = String(req.user?.employeeType || '').toLowerCase();
-  return type === '3pc';
+  return isAdminUser(req.user) || is3pUser(req.user);
+}
+
+function ownDsaCode(req) {
+  return getSubjectCode(req.user);
+}
+
+function sliderOwnedByUser(req, record) {
+  if (!record || isAdminUser(req.user)) return true;
+  if (!is3pUser(req.user)) return true;
+  return String(record.dsaCode || '').toUpperCase() === ownDsaCode(req);
 }
 
 async function listSlidersController(req, res) {
   const { mediaTab, section, country, status, q, limit } = req.query || {};
   try {
-    const records = await dsaSliderService.listSliders({ mediaTab, section, country, status, q, limit });
+    const dsaCode = is3pUser(req.user) ? ownDsaCode(req) : req.query?.dsaCode;
+    const records = await dsaSliderService.listSliders({
+      mediaTab,
+      section,
+      country,
+      status,
+      q,
+      dsaCode,
+      limit,
+    });
     return res.json({ records });
   } catch (error) {
     // eslint-disable-next-line no-console
@@ -29,6 +46,9 @@ async function getSliderController(req, res) {
   try {
     const record = await dsaSliderService.getSliderById(id);
     if (!record) return res.status(404).json({ message: 'Slider not found.' });
+    if (!sliderOwnedByUser(req, record)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
     return res.json({ record });
   } catch (error) {
     // eslint-disable-next-line no-console
@@ -43,10 +63,13 @@ async function createSliderController(req, res) {
   }
   try {
     const body = { ...(req.body || {}) };
-    if (String(req.user?.employeeType || '').toLowerCase() === '3pc' && !body.dsaCode) {
-      body.dsaCode = String(req.user?.employeeCode || req.user?.username || '').trim();
+    if (is3pUser(req.user)) {
+      body.dsaCode = ownDsaCode(req);
+      if (!body.dsaCode) {
+        return res.status(403).json({ message: 'DSA code is not configured for this account.' });
+      }
     }
-    const record = await dsaSliderService.createSlider(body, actorFromReq(req));
+    const record = await dsaSliderService.createSlider(body);
     return res.status(201).json({ record });
   } catch (error) {
     const msg = String(error?.message || '');
@@ -64,11 +87,16 @@ async function updateSliderController(req, res) {
   const { id } = req.params || {};
   if (!id) return res.status(400).json({ message: 'id is required.' });
   try {
-    const body = { ...(req.body || {}) };
-    if (String(req.user?.employeeType || '').toLowerCase() === '3pc' && !body.dsaCode) {
-      body.dsaCode = String(req.user?.employeeCode || req.user?.username || '').trim();
+    const existing = await dsaSliderService.getSliderById(id);
+    if (!existing) return res.status(404).json({ message: 'Slider not found.' });
+    if (!sliderOwnedByUser(req, existing)) {
+      return res.status(403).json({ message: 'Forbidden' });
     }
-    const record = await dsaSliderService.updateSlider(id, body, actorFromReq(req));
+    const body = { ...(req.body || {}) };
+    if (is3pUser(req.user)) {
+      body.dsaCode = ownDsaCode(req);
+    }
+    const record = await dsaSliderService.updateSlider(id, body);
     if (!record) return res.status(404).json({ message: 'Slider not found.' });
     return res.json({ record });
   } catch (error) {
@@ -99,6 +127,11 @@ async function deleteSliderController(req, res) {
   const { id } = req.params || {};
   if (!id) return res.status(400).json({ message: 'id is required.' });
   try {
+    const existing = await dsaSliderService.getSliderById(id);
+    if (!existing) return res.status(404).json({ message: 'Slider not found.' });
+    if (!sliderOwnedByUser(req, existing)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
     const deletedCount = await dsaSliderService.deleteSlider(id);
     if (!deletedCount) return res.status(404).json({ message: 'Slider not found.' });
     return res.json({ deleted: true });
@@ -122,7 +155,8 @@ async function listPublicSlidersBySlotController(req, res) {
 }
 
 async function sliderSummaryController(req, res) {
-  const { mediaTab, section, country, dsaCode } = req.query || {};
+  const { mediaTab, section, country } = req.query || {};
+  const dsaCode = is3pUser(req.user) ? ownDsaCode(req) : req.query?.dsaCode;
   try {
     const summary = await dsaSliderService.getSummary({ mediaTab, section, country, dsaCode });
     return res.json({ summary });
@@ -141,4 +175,3 @@ module.exports = {
   sliderSummaryController,
   slotStatusController,
 };
-

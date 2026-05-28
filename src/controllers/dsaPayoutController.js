@@ -1,16 +1,12 @@
 const dsaPayoutService = require('../services/dsaPayoutService');
-
-function isAdmin(req) {
-  return String(req.user?.role || '').toLowerCase() === 'admin';
-}
+const { isAdminUser, is3pUser, getSubjectCode } = require('../middleware/requireRole');
 
 async function listPayoutsController(req, res) {
   const { dsaCode, status, limit } = req.query || {};
   try {
-    const admin = isAdmin(req);
     let resolvedDsaCode = dsaCode;
-    if (!admin) {
-      const ownCode = String(req.user?.employeeCode || '').trim();
+    if (!isAdminUser(req.user)) {
+      const ownCode = getSubjectCode(req.user);
       if (!ownCode) {
         return res.status(403).json({ message: 'Only users mapped with a DSA code can access payouts.' });
       }
@@ -27,14 +23,13 @@ async function listPayoutsController(req, res) {
 
 async function createPayoutController(req, res) {
   try {
-    const admin = isAdmin(req);
-    const ownCode = String(req.user?.employeeCode || '').trim();
-    if (!admin && !ownCode) {
+    const ownCode = getSubjectCode(req.user);
+    if (!isAdminUser(req.user) && !ownCode) {
       return res.status(403).json({ message: 'Only users mapped with a DSA code can create payouts.' });
     }
     const payload = {
       ...(req.body || {}),
-      ...(!admin ? { dsaCode: ownCode } : {}),
+      ...(!isAdminUser(req.user) ? { dsaCode: ownCode } : {}),
     };
     const record = await dsaPayoutService.createPayout(payload);
     return res.status(201).json({ record });
@@ -48,7 +43,6 @@ async function createPayoutController(req, res) {
 }
 
 async function approvePayoutController(req, res) {
-  if (!isAdmin(req)) return res.status(403).json({ message: 'Only admin can approve payouts.' });
   const { id } = req.params || {};
   if (!id) return res.status(400).json({ message: 'id is required.' });
   try {
@@ -61,7 +55,6 @@ async function approvePayoutController(req, res) {
 }
 
 async function rejectPayoutController(req, res) {
-  if (!isAdmin(req)) return res.status(403).json({ message: 'Only admin can reject payouts.' });
   const { id } = req.params || {};
   if (!id) return res.status(400).json({ message: 'id is required.' });
   try {
@@ -74,7 +67,6 @@ async function rejectPayoutController(req, res) {
 }
 
 async function updatePayoutStatusController(req, res) {
-  if (!isAdmin(req)) return res.status(403).json({ message: 'Only admin can update payout status.' });
   const { id } = req.params || {};
   if (!id) return res.status(400).json({ message: 'id is required.' });
   const status = req.body?.status;

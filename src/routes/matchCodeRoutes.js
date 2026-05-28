@@ -1,5 +1,7 @@
 const express = require('express');
 const { authMiddleware } = require('../middleware/authMiddleware');
+const { requireRole, ROLES } = require('../middleware/requireRole');
+const { requireSection } = require('../middleware/requirePermission');
 const {
   listHistoryController,
   activeCodeController,
@@ -9,9 +11,15 @@ const {
 
 const router = express.Router();
 
-router.get('/history', authMiddleware, listHistoryController);
-router.get('/active', authMiddleware, activeCodeController);
-router.get('/validate', authMiddleware, validateController);
-router.post('/generate', authMiddleware, generateController);
+const matchGuard = [
+  authMiddleware,
+  requireRole(ROLES.ADMIN, ROLES.EMP),
+  requireSection('marketing', 'match-doe'),
+];
+
+router.get('/history', matchGuard, listHistoryController);
+router.get('/active', matchGuard, activeCodeController);
+router.get('/validate', matchGuard, validateController);
+router.post('/generate', matchGuard, generateController);
 
 module.exports = router;

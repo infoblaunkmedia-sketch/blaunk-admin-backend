@@ -1,4 +1,7 @@
 const express = require('express');
+const { authMiddleware } = require('../middleware/authMiddleware');
+const { requireRole, ROLES } = require('../middleware/requireRole');
+const { requireSection } = require('../middleware/requirePermission');
 const {
   listThirdPartyCredentialsController,
   getThirdPartyCredentialController,
@@ -8,10 +11,15 @@ const {
 
 const router = express.Router();
 
-router.get('/', listThirdPartyCredentialsController);
-router.post('/', saveThirdPartyCredentialController);
-router.get('/:id', getThirdPartyCredentialController);
-router.delete('/:id', deleteThirdPartyCredentialController);
+const credGuard = [
+  authMiddleware,
+  requireRole(ROLES.ADMIN, ROLES.EMP),
+  requireSection('people', '3p-credentials'),
+];
+
+router.get('/', credGuard, listThirdPartyCredentialsController);
+router.post('/', credGuard, saveThirdPartyCredentialController);
+router.get('/:id', credGuard, getThirdPartyCredentialController);
+router.delete('/:id', credGuard, deleteThirdPartyCredentialController);
 
 module.exports = router;
-
