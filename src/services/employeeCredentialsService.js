@@ -95,7 +95,10 @@ async function deleteByPan(pan) {
  */
 async function listForReport(filters) {
   const query = {};
-  if (filters.department) {
+  const empCode = String(filters.employeeCode || '').trim();
+  if (empCode) {
+    query.empCode = empCode;
+  } else if (filters.department) {
     query.department = filters.department;
   }
   const list = await EmployeeCredentials.find(query)

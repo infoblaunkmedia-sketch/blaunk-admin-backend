@@ -1,4 +1,5 @@
 const dsaSliderService = require('../services/dsaSliderService');
+const dsaService = require('../services/dsaService');
 const {
   isAdminUser,
   is3pUser,
@@ -19,9 +20,25 @@ function sliderOwnedByUser(req, record) {
   return String(record.dsaCode || '').toUpperCase() === ownDsaCode(req);
 }
 
+async function assertAdminPanelDsaAccess(req, res) {
+  if (!is3pUser(req.user)) return true;
+  const code = ownDsaCode(req);
+  if (!code) {
+    res.status(403).json({ message: 'DSA code is not configured for this account.' });
+    return false;
+  }
+  const allowed = await dsaService.isAdminPanelDsa(code);
+  if (!allowed) {
+    res.status(403).json({ message: 'Website DSA cannot access admin panel.' });
+    return false;
+  }
+  return true;
+}
+
 async function listSlidersController(req, res) {
   const { mediaTab, section, country, status, q, limit } = req.query || {};
   try {
+    if (!(await assertAdminPanelDsaAccess(req, res))) return;
     const dsaCode = is3pUser(req.user) ? ownDsaCode(req) : req.query?.dsaCode;
     const records = await dsaSliderService.listSliders({
       mediaTab,
@@ -31,6 +48,7 @@ async function listSlidersController(req, res) {
       q,
       dsaCode,
       limit,
+      adminPanelOnly: !is3pUser(req.user),
     });
     return res.json({ records });
   } catch (error) {
@@ -62,20 +80,27 @@ async function createSliderController(req, res) {
     return res.status(403).json({ message: 'Only admin/3P users can manage sliders.' });
   }
   try {
+    if (!(await assertAdminPanelDsaAccess(req, res))) return;
     const body = { ...(req.body || {}) };
     if (is3pUser(req.user)) {
-      body.dsaCode = ownDsaCode(req);
-      if (!body.dsaCode) {
-        return res.status(403).json({ message: 'DSA code is not configured for this account.' });
-      }
+      const empCode = ownDsaCode(req);
+      body.dsaCode = empCode;
+      body.uploadSource = 'admin_3p';
+      body.uploadedByDsaCode = empCode;
+    } else if (String(body.uploadSource || '').toLowerCase() === 'vendor_direct') {
+      body.uploadSource = 'vendor_direct';
+      body.uploadedByDsaCode = null;
+    } else {
+      body.uploadSource = body.uploadSource || 'admin_3p';
     }
     const record = await dsaSliderService.createSlider(body);
     return res.status(201).json({ record });
   } catch (error) {
     const msg = String(error?.message || '');
     const low = msg.toLowerCase();
-    const status =
-      low.includes('required') || low.includes('invalid') || low.includes('slots are full') ? 400 : 500;
+    let status = 500;
+    if (error?.statusCode === 403 || low.includes('upload limit reached')) status = 403;
+    else if (low.includes('required') || low.includes('invalid') || low.includes('slots are full')) status = 400;
     return res.status(status).json({ message: msg || 'Failed to create slider.' });
   }
 }

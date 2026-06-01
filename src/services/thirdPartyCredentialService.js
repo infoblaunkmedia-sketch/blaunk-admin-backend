@@ -1,5 +1,7 @@
 const ThirdPartyCredential = require('../models/ThirdPartyCredential');
 const employeeService = require('./employeeService');
+const dsaService = require('./dsaService');
+const matchCodeService = require('./matchCodeService');
 
 function cleanStr(v) {
   return v == null ? '' : String(v);
@@ -23,6 +25,7 @@ async function listThirdPartyCredentials({ q, limit = 200 } = {}) {
       { department: { $regex: needle, $options: 'i' } },
       { name: { $regex: needle, $options: 'i' } },
       { threePEmplCode: { $regex: needle, $options: 'i' } },
+      { matchCode: { $regex: needle, $options: 'i' } },
       { mobileNo: { $regex: needle, $options: 'i' } },
       { email: { $regex: needle, $options: 'i' } },
       { username: { $regex: needle, $options: 'i' } },
@@ -59,6 +62,8 @@ async function upsertThirdPartyCredential(payload) {
     generatedOrResolved3pCode = await employeeService.getNextEmployeeCode('3pc');
   }
 
+  const matchCode = await matchCodeService.resolveActiveMatchCodeFor3p();
+
   const set = {
     department: cleanStr(body.department),
     name: cleanStr(body.name),
@@ -77,6 +82,7 @@ async function upsertThirdPartyCredential(payload) {
     state: cleanStr(body.state),
     threePCompanyName: cleanStr(body.threePCompanyName),
     threePEmplCode: generatedOrResolved3pCode,
+    matchCode,
     threePEntity: cleanStr(body.threePEntity),
     businessCode: cleanStr(body.businessCode),
     branchCode: cleanStr(body.branchCode),
@@ -107,21 +113,35 @@ async function upsertThirdPartyCredential(payload) {
     notes: cleanStr(body.notes),
   };
 
+  let record;
   if (body.id) {
-    const record = await ThirdPartyCredential.findOneAndUpdate(
+    record = await ThirdPartyCredential.findOneAndUpdate(
       { _id: body.id },
       {
         $set: set,
       },
       { returnDocument: 'after' },
     ).lean();
-    return record;
+  } else {
+    const created = await ThirdPartyCredential.create({
+      ...set,
+    });
+    record = created.toObject();
   }
 
-  const created = await ThirdPartyCredential.create({
-    ...set,
-  });
-  return created.toObject();
+  if (record?.threePEmplCode) {
+    await dsaService.ensureAdminDsa({
+      dsaCode: record.threePEmplCode,
+      name: record.name,
+      companyName: record.threePCompanyName,
+      mobile: record.mobileNo,
+      email: record.email,
+      country: record.country,
+      status: record.status,
+    });
+  }
+
+  return record;
 }
 
 async function deleteThirdPartyCredentialById(id) {

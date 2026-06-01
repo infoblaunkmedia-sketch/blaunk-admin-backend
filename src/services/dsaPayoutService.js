@@ -1,4 +1,5 @@
 const DsaPayout = require('../models/DsaPayout');
+const dsaLimitService = require('./dsaLimitService');
 const { STATUS, normalizePayoutStatus, isNegativeStatus } = require('../constants/payoutStatus');
 
 function cleanString(v) {
@@ -119,7 +120,12 @@ async function updatePayoutStatusById(id, statusInput, note, actedBy) {
     { _id: id },
     { $set: patch },
     { returnDocument: 'after' },
-  ).lean();
+  ).lean().then(async (updated) => {
+    if (updated && status === STATUS.APPROVED) {
+      await dsaLimitService.syncFromApprovedPayout(updated);
+    }
+    return updated;
+  });
 }
 
 async function approvePayoutById(id, note, actedBy) {

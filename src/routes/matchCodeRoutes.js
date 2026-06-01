@@ -1,7 +1,7 @@
 const express = require('express');
 const { authMiddleware } = require('../middleware/authMiddleware');
 const { requireRole, ROLES } = require('../middleware/requireRole');
-const { requireSection } = require('../middleware/requirePermission');
+const { requireAnySection, requireAnySectionOr3p } = require('../middleware/requirePermission');
 const {
   listHistoryController,
   activeCodeController,
@@ -11,15 +11,26 @@ const {
 
 const router = express.Router();
 
-const matchGuard = [
-  authMiddleware,
-  requireRole(ROLES.ADMIN, ROLES.EMP),
-  requireSection('marketing', 'match-doe'),
+const matchSectionPairs = [
+  ['settings', 'match-code'],
+  ['marketing', 'match-doe'],
 ];
 
-router.get('/history', matchGuard, listHistoryController);
-router.get('/active', matchGuard, activeCodeController);
-router.get('/validate', matchGuard, validateController);
-router.post('/generate', matchGuard, generateController);
+const matchAdminGuard = [
+  authMiddleware,
+  requireRole(ROLES.ADMIN, ROLES.EMP),
+  requireAnySection(matchSectionPairs),
+];
+
+const matchReadGuard = [
+  authMiddleware,
+  requireRole(ROLES.ADMIN, ROLES.EMP, ROLES.THREE_P),
+  requireAnySectionOr3p([['channelPartners', 'dsa'], ...matchSectionPairs]),
+];
+
+router.get('/history', matchAdminGuard, listHistoryController);
+router.get('/active', matchReadGuard, activeCodeController);
+router.get('/validate', matchReadGuard, validateController);
+router.post('/generate', matchAdminGuard, generateController);
 
 module.exports = router;

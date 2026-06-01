@@ -39,8 +39,10 @@ async function saveThirdPartyCredentialController(req, res) {
     // eslint-disable-next-line no-console
     console.error('saveThirdPartyCredential error:', error);
     const msg = String(error?.message || '');
-    const status = msg.toLowerCase().includes('required') ? 400 : 500;
-    return res.status(status).json({ message: msg || 'Failed to save 3P credential.' });
+    const lower = msg.toLowerCase();
+    const status = lower.includes('required') || lower.includes('match code') ? 400 : 500;
+    const clientMsg = msg || 'Failed to save 3P credential.';
+    return res.status(status).json({ message: clientMsg });
   }
 }
 

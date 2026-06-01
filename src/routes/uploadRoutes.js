@@ -5,6 +5,10 @@ const multer = require('multer');
 const { authMiddleware } = require('../middleware/authMiddleware');
 const { requireRole, ROLES, requireAdmin } = require('../middleware/requireRole');
 const { requireSection } = require('../middleware/requirePermission');
+const {
+  require3pMatchCodeForUpload,
+  withUpload3pMeta,
+} = require('../middleware/require3pMatchCodeForUpload');
 const sellerService = require('../services/sellerService');
 const cloudinaryService = require('../services/cloudinaryService');
 const siteMediaService = require('../services/siteMediaService');
@@ -57,7 +61,11 @@ const cloudinaryUpload = multer({
   limits: { fileSize: 1024 * 1024 },
 });
 
-const uploadGuard = [authMiddleware, requireRole(ROLES.ADMIN, ROLES.EMP, ROLES.THREE_P)];
+const uploadGuard = [
+  authMiddleware,
+  requireRole(ROLES.ADMIN, ROLES.EMP, ROLES.THREE_P),
+  require3pMatchCodeForUpload,
+];
 
 const adminPersonnelMediaGuard = [
   authMiddleware,
@@ -88,11 +96,6 @@ const bannerUpload = multer({
   limits: { fileSize: 2 * 1024 * 1024 },
 });
 
-const giffUpload = multer({
-  storage,
-  limits: { fileSize: 700 * 1024 },
-});
-
 function normalizeUploadSection(raw) {
   return String(raw || '')
     .trim()
@@ -106,6 +109,7 @@ function normalizeUploadSlot(raw) {
   return Math.floor(n);
 }
 
+/** Admin/emp only — 3P uses /image and /employee-document (uploadGuard includes match-code check). */
 const kycUploadGuard = [
   authMiddleware,
   requireRole(ROLES.ADMIN, ROLES.EMP),
@@ -121,12 +125,14 @@ router.post(
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    return res.json({
-      message: 'File uploaded successfully',
-      filename: req.file.filename,
-      originalName: req.file.originalname,
-      url: `/uploads/${req.file.filename}`,
-    });
+    return res.json(
+      withUpload3pMeta(req, {
+        message: 'File uploaded successfully',
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        url: `/uploads/${req.file.filename}`,
+      }),
+    );
   },
 );
 
@@ -189,40 +195,105 @@ router.post(
 router.post(
   '/giff',
   cmsGiffUploadGuard,
-  giffUpload.single('image'),
-  (req, res) => {
+  cloudinaryUpload.single('image'),
+  async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
     }
     if (!req.file.mimetype?.startsWith('image/')) {
       return res.status(400).json({ message: 'Please select an image file.' });
     }
-    return res.json({
-      message: 'GIFF image uploaded',
-      filename: req.file.filename,
-      originalName: req.file.originalname,
-      url: `/uploads/${req.file.filename}`,
-    });
+
+    const category = normalizeUploadSection(req.body?.category) || 'giff';
+
+    if (cloudinaryService.isConfigured()) {
+      const folderBase = process.env.CLOUDINARY_PROJECT_FOLDER || 'bluank';
+      const folder = `${folderBase}/giff/${category}`;
+      try {
+        const result = await cloudinaryService.uploadImageBuffer(req.file.buffer, {
+          folder,
+          publicId: `slot-${Date.now()}`,
+        });
+        return res.json({
+          message: 'GIFF image uploaded',
+          url: result.secure_url,
+          publicId: result.public_id,
+          originalName: req.file.originalname,
+        });
+      } catch (error) {
+        const msg = String(error?.message || 'Cloudinary upload failed.');
+        return res.status(500).json({ message: msg });
+      }
+    }
+
+    const ext = path.extname(req.file.originalname) || '.jpg';
+    const filename = `giff-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    const filePath = path.join(uploadsDir, filename);
+    try {
+      fs.writeFileSync(filePath, req.file.buffer);
+      return res.json({
+        message: 'GIFF image uploaded',
+        filename,
+        originalName: req.file.originalname,
+        url: `/uploads/${filename}`,
+      });
+    } catch (error) {
+      const msg = String(error?.message || 'Upload failed.');
+      return res.status(500).json({ message: msg });
+    }
   },
 );
 
 router.post(
   '/banner',
   cmsBannerUploadGuard,
-  bannerUpload.single('image'),
-  (req, res) => {
+  cloudinaryUpload.single('image'),
+  async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
     }
     if (!req.file.mimetype?.startsWith('image/')) {
       return res.status(400).json({ message: 'Please select an image file.' });
     }
-    return res.json({
-      message: 'Banner image uploaded',
-      filename: req.file.filename,
-      originalName: req.file.originalname,
-      url: `/uploads/${req.file.filename}`,
-    });
+
+    const page = normalizeUploadSection(req.body?.page) || 'home';
+    const position = normalizeUploadSection(req.body?.position) || 'banner';
+
+    if (cloudinaryService.isConfigured()) {
+      const folderBase = process.env.CLOUDINARY_PROJECT_FOLDER || 'bluank';
+      const folder = `${folderBase}/banners/${page}/${position}`;
+      try {
+        const result = await cloudinaryService.uploadImageBuffer(req.file.buffer, {
+          folder,
+          publicId: `slide-${Date.now()}`,
+        });
+        return res.json({
+          message: 'Banner image uploaded',
+          url: result.secure_url,
+          publicId: result.public_id,
+          originalName: req.file.originalname,
+        });
+      } catch (error) {
+        const msg = String(error?.message || 'Cloudinary upload failed.');
+        return res.status(500).json({ message: msg });
+      }
+    }
+
+    const ext = path.extname(req.file.originalname) || '.jpg';
+    const filename = `banner-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    const filePath = path.join(uploadsDir, filename);
+    try {
+      fs.writeFileSync(filePath, req.file.buffer);
+      return res.json({
+        message: 'Banner image uploaded',
+        filename,
+        originalName: req.file.originalname,
+        url: `/uploads/${filename}`,
+      });
+    } catch (error) {
+      const msg = String(error?.message || 'Upload failed.');
+      return res.status(500).json({ message: msg });
+    }
   },
 );
 
@@ -235,12 +306,14 @@ router.post(
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    return res.json({
-      message: 'File uploaded successfully',
-      filename: req.file.filename,
-      originalName: req.file.originalname,
-      url: `/uploads/${req.file.filename}`,
-    });
+    return res.json(
+      withUpload3pMeta(req, {
+        message: 'File uploaded successfully',
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        url: `/uploads/${req.file.filename}`,
+      }),
+    );
   },
 );
 

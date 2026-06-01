@@ -1,19 +1,24 @@
 const express = require('express');
 const { authMiddleware } = require('../middleware/authMiddleware');
 const { requireRole, ROLES } = require('../middleware/requireRole');
-const { requireSection } = require('../middleware/requirePermission');
+const { requireAnySectionOr3p } = require('../middleware/requirePermission');
 const {
+  listPayrollEmployeesController,
+  listPayrollDepartmentsController,
   generatePayslipReportController,
 } = require('../controllers/payslipReportController');
 
 const router = express.Router();
 
-router.post(
-  '/',
+const payrollGuard = [
   authMiddleware,
   requireRole(ROLES.ADMIN, ROLES.EMP),
-  requireSection('people', 'payroll'),
-  generatePayslipReportController,
-);
+  requireAnySectionOr3p([['people', 'payroll']], ['people']),
+];
+
+router.get('/employees', payrollGuard, listPayrollEmployeesController);
+router.get('/departments', payrollGuard, listPayrollDepartmentsController);
+
+router.post('/', payrollGuard, generatePayslipReportController);
 
 module.exports = router;

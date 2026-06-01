@@ -28,8 +28,8 @@ async function generateController(req, res) {
     return res.status(403).json({ message: 'Only admin can generate Match Code.' });
   }
   try {
-    const entry = await matchCodeService.generateNew(req.user?.username || 'admin');
-    return res.status(201).json({ entry });
+    const { entry, synced3pCount } = await matchCodeService.generateNew(req.user?.username || 'admin');
+    return res.status(201).json({ entry, synced3pCount });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to generate Match Code.' });
   }

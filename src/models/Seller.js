@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const APPROVAL_STATUSES = ['pending', 'approved', 'rejected'];
 const KYC_STATUSES = ['Pending', 'Verified', 'Rejected'];
-const VENDOR_STATUSES = ['Active', 'Inactive', 'Suspended'];
+const VENDOR_STATUSES = ['Approved', 'Suspended', 'Deleted'];
 
 const bankSchema = new mongoose.Schema(
   {
@@ -41,7 +41,7 @@ const sellerSchema = new mongoose.Schema(
     productCategories: { type: String, default: '', trim: true },
     bank: { type: bankSchema, default: () => ({}) },
     kycStatus: { type: String, enum: KYC_STATUSES, default: 'Pending' },
-    status: { type: String, enum: VENDOR_STATUSES, default: 'Active' },
+    status: { type: String, enum: VENDOR_STATUSES, default: 'Approved' },
     approvalStatus: { type: String, enum: APPROVAL_STATUSES, default: 'pending' },
     rejectionReason: { type: String, default: '', trim: true },
     approvedAt: { type: Date, default: null },

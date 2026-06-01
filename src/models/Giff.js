@@ -6,6 +6,7 @@ const giffSchema = new mongoose.Schema(
     imageUrl: { type: String, default: '', trim: true },
     format: { type: String, default: 'gif', trim: true, lowercase: true },
     sortOrder: { type: Number, default: 1 },
+    productId: { type: String, default: '', trim: true },
     isActive: { type: Boolean, default: true, index: true },
   },
   { timestamps: true },

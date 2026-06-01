@@ -10,6 +10,9 @@ const TOP_LEVEL_MODULES = new Set([
   'finance',
   'platform',
   'marketing',
+  'sales',
+  'it',
+  'payslip',
   'customers',
   'reports',
   'corporate',
@@ -25,13 +28,37 @@ function hasModuleAccess(sections, module) {
   const list = Array.isArray(sections) ? sections : [];
   if (list.includes(module)) return true;
   const prefix = `${module}:`;
-  return list.some((p) => String(p).startsWith(prefix));
+  if (list.some((p) => String(p).startsWith(prefix))) return true;
+  if (module === 'it' && list.includes('settings:ip-management')) return true;
+  if (module === 'settings' && list.includes('marketing')) return true;
+  if (module === 'settings' && list.some((p) => String(p).startsWith('marketing:'))) return true;
+  // Legacy: standalone Payslip module grant → People
+  if (module === 'people' && list.includes('payslip')) return true;
+  return false;
 }
 
 function hasSectionAccess(sections, module, childKey) {
   const list = Array.isArray(sections) ? sections : [];
   if (list.includes(module)) return true;
-  return list.includes(sectionPermissionKey(module, childKey));
+  if (list.includes(sectionPermissionKey(module, childKey))) return true;
+  if (module === 'it' && childKey === 'ip-management' && list.includes('settings:ip-management')) {
+    return true;
+  }
+  if (module === 'settings' && childKey === 'slot-settings' && list.includes('marketing:slot-settings')) {
+    return true;
+  }
+  if (
+    module === 'settings' &&
+    childKey === 'match-code' &&
+    (list.includes('marketing:match-doe') || list.includes('marketing:match-code'))
+  ) {
+    return true;
+  }
+  // Legacy: standalone Payslip module → People → Payroll
+  if (module === 'people' && childKey === 'payroll' && list.includes('payslip')) {
+    return true;
+  }
+  return false;
 }
 
 function isKnownSection(value) {

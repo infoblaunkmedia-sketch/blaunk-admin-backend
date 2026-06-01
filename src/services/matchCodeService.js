@@ -1,4 +1,5 @@
 const MatchCode = require('../models/MatchCode');
+const ThirdPartyCredential = require('../models/ThirdPartyCredential');
 
 function cleanString(v) {
   return String(v == null ? '' : v).trim();
@@ -28,6 +29,24 @@ async function getActive() {
   return toEntry(rec);
 }
 
+async function syncAllThirdPartyCredentials(activeCode) {
+  const code = cleanString(activeCode);
+  if (!code) {
+    const cleared = await ThirdPartyCredential.updateMany({}, { $set: { matchCode: null } });
+    return { modifiedCount: cleared.modifiedCount || 0 };
+  }
+  const updated = await ThirdPartyCredential.updateMany({}, { $set: { matchCode: code } });
+  return { modifiedCount: updated.modifiedCount || 0 };
+}
+
+async function resolveActiveMatchCodeFor3p() {
+  const active = await getActive();
+  if (!active?.code) {
+    throw new Error('No active Match Code. Generate one in Settings → Match Code first.');
+  }
+  return active.code;
+}
+
 async function generateNew(generatedBy) {
   const code = String(Math.floor(10000 + Math.random() * 90000));
   await MatchCode.updateMany({ isActive: true }, { $set: { isActive: false } });
@@ -36,7 +55,8 @@ async function generateNew(generatedBy) {
     generatedBy: cleanString(generatedBy) || 'system',
     isActive: true,
   });
-  return toEntry(created.toObject());
+  const sync = await syncAllThirdPartyCredentials(code);
+  return { entry: toEntry(created.toObject()), synced3pCount: sync.modifiedCount };
 }
 
 async function validateCode(code) {
@@ -51,4 +71,6 @@ module.exports = {
   getActive,
   generateNew,
   validateCode,
+  syncAllThirdPartyCredentials,
+  resolveActiveMatchCodeFor3p,
 };

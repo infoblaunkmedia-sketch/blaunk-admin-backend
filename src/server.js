@@ -69,6 +69,7 @@ const sellerRoutes = require('./routes/sellerRoutes');
 const dsaSliderRoutes = require('./routes/dsaSliderRoutes');
 const mediaSlotConfigRoutes = require('./routes/mediaSlotConfigRoutes');
 const dsaPayoutRoutes = require('./routes/dsaPayoutRoutes');
+const dsaLimitRoutes = require('./routes/dsaLimitRoutes');
 const matchCodeRoutes = require('./routes/matchCodeRoutes');
 const productRoutes = require('./routes/productRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
@@ -83,11 +84,22 @@ const shopCategoryService = require('./services/shopCategoryService');
 const siteMediaRoutes = require('./routes/siteMediaRoutes');
 const testimonialRoutes = require('./routes/testimonialRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
+const reportsRoutes = require('./routes/reportsRoutes');
+const verifierRoutes = require('./routes/verifierRoutes');
 const categoryService = require('./services/categoryService');
 const productService = require('./services/productService');
 const orderService = require('./services/orderService');
 const referralService = require('./services/referralService');
+const dsaService = require('./services/dsaService');
+const matchCodeService = require('./services/matchCodeService');
+const ThirdPartyCredential = require('./models/ThirdPartyCredential');
+const { activityLogMiddleware } = require('./middleware/activityLogMiddleware');
+const issueRoutes = require('./routes/issueRoutes');
+const reviewRoutes = require('./routes/reviewRoutes');
+const payrollRoutes = require('./routes/payrollRoutes');
+const vacancyRoutes = require('./routes/vacancyRoutes');
 const bannerService = require('./services/bannerService');
+const giffService = require('./services/giffService');
 const DsaSlider = require('./models/DsaSlider');
 const { connectDatabase } = require('./config/database');
 const authService = require('./services/authService');
@@ -151,6 +163,7 @@ app.options('*', cors());
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.use(morgan('dev'));
+app.use(activityLogMiddleware);
 
 // IP whitelist: allow only requests from allowed_ips (bypass: /health, /admin/*)
 app.use(checkIPWhitelist);
@@ -178,6 +191,7 @@ app.use('/api/sellers', sellerRoutes);
 app.use('/api/dsa-sliders', dsaSliderRoutes);
 app.use('/api/media-slot-config', mediaSlotConfigRoutes);
 app.use('/api/dsa-payouts', dsaPayoutRoutes);
+app.use('/api/dsa-limits', dsaLimitRoutes);
 app.use('/api/match-code', matchCodeRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
@@ -191,6 +205,12 @@ app.use('/api/admin-personnel/media', siteMediaRoutes);
 app.use('/api/site-media', siteMediaRoutes);
 app.use('/api/testimonials', testimonialRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/verifiers', verifierRoutes);
+app.use('/api/issues', issueRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/payroll', payrollRoutes);
+app.use('/api/vacancies', vacancyRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
@@ -263,6 +283,7 @@ async function start() {
       // eslint-disable-next-line no-console
       console.log(`${LOG_PREFIX} Seeded ${seed.seeded} sample B2C customer(s).`);
     }
+    await sellerService.migrateVendorStatuses();
     const sellerSeed = await sellerService.ensureSeedSellersIfEmpty();
     if (sellerSeed.seeded > 0) {
       // eslint-disable-next-line no-console
@@ -273,6 +294,111 @@ async function start() {
     await orderService.ensureSeedOrders();
     await referralService.ensureSeedReferrals();
     await bannerService.ensureSeedBanners();
+    const bgtHeroSeed = await bannerService.ensureBgtCommonHeroBanners();
+    if (bgtHeroSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${bgtHeroSeed.seeded} BGT Common hero banner(s).`);
+    }
+    const bgtDiscoverySeed = await bannerService.ensureBgtDiscoveryHubBanners();
+    if (bgtDiscoverySeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${bgtDiscoverySeed.seeded} BGT Discovery Hub record(s).`);
+    }
+    const bgtExploreSeed = await bannerService.ensureBgtExploreGalleryBanners();
+    if (bgtExploreSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${bgtExploreSeed.seeded} BGT Explore Gallery image(s).`);
+    }
+    const bgtExplorerCarouselSeed = await bannerService.ensureBgtExplorerCarouselBanners();
+    if (bgtExplorerCarouselSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${bgtExplorerCarouselSeed.seeded} BGT Explorer Carousel slide(s).`);
+    }
+    const bgtIntlSourcingSeed = await bannerService.ensureBgtInternationalSourcingBanners();
+    if (bgtIntlSourcingSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${bgtIntlSourcingSeed.seeded} International Sourcing banner slide(s).`);
+    }
+    const bgtAdvantageSeed = await bannerService.ensureBgtBlaunkAdvantageBanners();
+    if (bgtAdvantageSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${bgtAdvantageSeed.seeded} Blaunk Exporter Directory record(s).`);
+    }
+    const bgtViewMoreHeroSeed = await bannerService.ensureBgtViewMoreHeroBanners();
+    if (bgtViewMoreHeroSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${bgtViewMoreHeroSeed.seeded} View More hero banner slide(s).`);
+    }
+    const bgtViewMoreSponsoredSeed = await bannerService.ensureBgtViewMoreSponsoredAdsBanners();
+    if (bgtViewMoreSponsoredSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${bgtViewMoreSponsoredSeed.seeded} View More sponsored ad banner(s).`);
+    }
+    const bgtViewMorePremiumSeed = await bannerService.ensureBgtViewMorePremiumShowcaseBanners();
+    if (bgtViewMorePremiumSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${bgtViewMorePremiumSeed.seeded} View More premium showcase banner(s).`);
+    }
+    const bgtViewMoreTrendingSeed = await bannerService.ensureBgtViewMoreTrendingDiscoveryBanners();
+    if (bgtViewMoreTrendingSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${bgtViewMoreTrendingSeed.seeded} View More trending discovery card(s).`);
+    }
+    const bgtViewMoreDealsSeed = await bannerService.ensureBgtViewMoreDealsOffersBanner();
+    if (bgtViewMoreDealsSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded View More deals & offers banner.`);
+    }
+    const bgtViewMoreBrandFooterSeed = await bannerService.ensureBgtViewMoreBrandFooterBanner();
+    if (bgtViewMoreBrandFooterSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded View More brand footer banner.`);
+    }
+    const bgtViewMoreSidebarSeed = await bannerService.ensureBgtViewMoreSidebarAdsBanners();
+    if (bgtViewMoreSidebarSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${bgtViewMoreSidebarSeed.seeded} View More sidebar ad(s).`);
+    }
+    const boutiqueHeroSeed = await bannerService.ensureBoutiqueHeroBanners();
+    if (boutiqueHeroSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${boutiqueHeroSeed.seeded} Boutique hero slide(s).`);
+    }
+    const boutiqueFashionSeed = await bannerService.ensureBoutiqueFashionAccessoriesBanners();
+    if (boutiqueFashionSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${boutiqueFashionSeed.seeded} Boutique fashion-accessories record(s).`);
+    }
+    const boutiqueTrendyStarSeed = await bannerService.ensureBoutiqueTrendyStarBanners();
+    if (boutiqueTrendyStarSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${boutiqueTrendyStarSeed.seeded} Boutique trendy-star record(s).`);
+    }
+    const boutiqueEditorialSeed = await bannerService.ensureBoutiqueEditorialGalleryBanners();
+    if (boutiqueEditorialSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${boutiqueEditorialSeed.seeded} Boutique editorial-gallery record(s).`);
+    }
+    const boutiqueNewLaunchSeed = await bannerService.ensureBoutiqueNewLaunchCarouselBanners();
+    if (boutiqueNewLaunchSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${boutiqueNewLaunchSeed.seeded} Boutique new-launch-carousel slide(s).`);
+    }
+    const boutiqueExclusiveVideoSeed = await bannerService.ensureBoutiqueExclusiveVideoBanners();
+    if (boutiqueExclusiveVideoSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${boutiqueExclusiveVideoSeed.seeded} Boutique exclusive-video record(s).`);
+    }
+    const boutiqueDisclaimerSeed = await bannerService.ensureBoutiqueDisclaimerUtilityBanners();
+    if (boutiqueDisclaimerSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${boutiqueDisclaimerSeed.seeded} Boutique disclaimer-utility record(s).`);
+    }
+    const bgtViewMoreGiffSeed = await giffService.ensureBgtViewMoreGiffBanners();
+    if (bgtViewMoreGiffSeed.seeded > 0) {
+      // eslint-disable-next-line no-console
+      console.log(`${LOG_PREFIX} Seeded ${bgtViewMoreGiffSeed.seeded} BGT View More GIFF record(s).`);
+    }
     const catSeed = await shopCategoryService.ensureSeedCategoriesIfEmpty();
     if (catSeed.seeded > 0) {
       // eslint-disable-next-line no-console
@@ -287,6 +413,20 @@ async function start() {
     if (mig.migrated > 0) {
       // eslint-disable-next-line no-console
       console.log(`${LOG_PREFIX} Migrated ${mig.migrated} legacy shareholding document(s) to Shareholder + History.`);
+    }
+    await dsaService.syncAdminDsasFromCredentials();
+    const planChargesService = require('./services/planChargesService');
+    await planChargesService.seedDefaultsIfEmpty();
+    const { startExpireSliderJob } = require('./jobs/expireSliders');
+    startExpireSliderJob();
+    await ThirdPartyCredential.collection.dropIndex('matchCode_1').catch(() => undefined);
+    const activeMatch = await matchCodeService.getActive();
+    if (activeMatch?.code) {
+      const sync = await matchCodeService.syncAllThirdPartyCredentials(activeMatch.code);
+      if (sync.modifiedCount > 0) {
+        // eslint-disable-next-line no-console
+        console.log(`${LOG_PREFIX} Synced ${sync.modifiedCount} 3P credential(s) to active Match Code.`);
+      }
     }
   } catch (error) {
     logErrorDetail('Step 2 FAILED (post-connect startup)', error);

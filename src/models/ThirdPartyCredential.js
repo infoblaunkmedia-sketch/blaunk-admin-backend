@@ -30,6 +30,8 @@ const thirdPartyCredentialSchema = new mongoose.Schema(
     state: { type: String, trim: true, default: '' },
     threePCompanyName: { type: String, trim: true, default: '' },
     threePEmplCode: { type: String, trim: true, default: '' }, // This is the 3PC login code
+    /** Mirrors active Settings → Match Code (shared by all 3P employees). */
+    matchCode: { type: String, trim: true, default: null },
     threePEntity: { type: String, trim: true, default: '' },
     businessCode: { type: String, trim: true, default: '' },
     branchCode: { type: String, trim: true, default: '' },
@@ -67,6 +69,7 @@ const thirdPartyCredentialSchema = new mongoose.Schema(
 thirdPartyCredentialSchema.index({ name: 1 });
 thirdPartyCredentialSchema.index({ department: 1 });
 thirdPartyCredentialSchema.index({ threePEmplCode: 1 });
+thirdPartyCredentialSchema.index({ matchCode: 1 });
 
 const ThirdPartyCredential =
   mongoose.models.ThirdPartyCredential ||

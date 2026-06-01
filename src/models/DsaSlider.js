@@ -14,10 +14,14 @@ const dsaSliderSchema = new mongoose.Schema(
     luxuryFees: { type: Number, default: 0, min: 0 },
     discount: { type: Number, default: 0, min: 0 },
     toPay: { type: Number, default: 0, min: 0 },
-    status: { type: String, enum: ['Draft', 'Active', 'Inactive'], default: 'Draft' },
+    status: { type: String, enum: ['Draft', 'Active', 'Inactive', 'Expired'], default: 'Draft' },
     uploadDate: { type: Date, default: Date.now },
     expiryDate: { type: Date, default: null },
     dsaCode: { type: String, trim: true, default: '' },
+    /** vendor_direct | admin_3p */
+    uploadSource: { type: String, enum: ['vendor_direct', 'admin_3p'], default: 'admin_3p', index: true },
+    /** 3P employee code when uploadSource is admin_3p */
+    uploadedByDsaCode: { type: String, trim: true, default: null },
   },
   { timestamps: true },
 );

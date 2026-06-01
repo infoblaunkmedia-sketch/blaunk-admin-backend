@@ -1,6 +1,20 @@
 const Seller = require('../models/Seller');
-const { APPROVAL_STATUSES } = require('../models/Seller');
+const { APPROVAL_STATUSES, VENDOR_STATUSES } = require('../models/Seller');
 const notificationService = require('./notificationService');
+const verifierService = require('./verifierService');
+
+const LEGACY_VENDOR_STATUS_MAP = {
+  Active: 'Approved',
+  Inactive: 'Deleted',
+  Suspended: 'Suspended',
+};
+
+function normalizeVendorStatus(status) {
+  const s = cleanString(status);
+  if (VENDOR_STATUSES.includes(s)) return s;
+  if (LEGACY_VENDOR_STATUS_MAP[s]) return LEGACY_VENDOR_STATUS_MAP[s];
+  return 'Approved';
+}
 
 function cleanString(v) {
   return String(v == null ? '' : v).trim();
@@ -41,7 +55,7 @@ function toDto(doc) {
     productCategories: doc.productCategories || '',
     bank: doc.bank || {},
     kycStatus: doc.kycStatus || 'Pending',
-    status: doc.status || 'Active',
+    status: normalizeVendorStatus(doc.status),
     approvalStatus: doc.approvalStatus || 'pending',
     rejectionReason: doc.rejectionReason || '',
     approvedAt: doc.approvedAt,
@@ -151,7 +165,7 @@ async function approveSeller(id, actedBy) {
       $set: {
         approvalStatus: 'approved',
         kycStatus: 'Verified',
-        status: 'Active',
+        status: 'Approved',
         rejectionReason: '',
         approvedAt: new Date(),
         approvedBy: actor,
@@ -179,7 +193,7 @@ async function rejectSeller(id, reason, actedBy) {
       $set: {
         approvalStatus: 'rejected',
         kycStatus: 'Rejected',
-        status: 'Inactive',
+        status: 'Suspended',
         rejectionReason,
         rejectedAt: new Date(),
         rejectedBy: actor,
@@ -193,6 +207,40 @@ async function rejectSeller(id, reason, actedBy) {
 }
 
 async function saveSeller(payload) {
+  if (payload.id) {
+    const existing = await Seller.findById(payload.id).lean();
+    if (!existing) throw new Error('Seller not found.');
+
+    const vendorCode = cleanString(payload.vendorCode || existing.vendorCode).toUpperCase();
+    const businessName = cleanString(payload.businessName || existing.businessName);
+    if (!vendorCode) throw new Error('vendorCode is required');
+    if (!businessName) throw new Error('businessName is required');
+
+    const data = {
+      vendorCode,
+      businessName,
+      ownerName: cleanString(payload.ownerName ?? existing.ownerName),
+      mobile: cleanString(payload.mobile ?? existing.mobile),
+      email: cleanString(payload.email ?? existing.email).toLowerCase(),
+      address: cleanString(payload.address ?? existing.address),
+      city: cleanString(payload.city ?? existing.city),
+      state: cleanString(payload.state ?? existing.state),
+      country: cleanString(payload.country ?? existing.country) || 'India',
+      productCategories: cleanString(payload.productCategories ?? existing.productCategories),
+      bank: payload.bank ?? existing.bank ?? {},
+      kycStatus: payload.kycStatus ?? existing.kycStatus ?? 'Pending',
+      status: normalizeVendorStatus(payload.status ?? existing.status),
+      joiningDate: cleanString(payload.joiningDate ?? existing.joiningDate) || formatDate(existing.createdAt),
+    };
+
+    const updated = await Seller.findByIdAndUpdate(
+      payload.id,
+      { $set: data },
+      { returnDocument: 'after' },
+    ).lean();
+    return toDto(updated);
+  }
+
   const vendorCode = cleanString(payload.vendorCode).toUpperCase();
   if (!vendorCode) throw new Error('vendorCode is required');
   if (!cleanString(payload.businessName)) throw new Error('businessName is required');
@@ -210,18 +258,9 @@ async function saveSeller(payload) {
     productCategories: cleanString(payload.productCategories),
     bank: payload.bank || {},
     kycStatus: payload.kycStatus || 'Pending',
-    status: payload.status || 'Active',
+    status: normalizeVendorStatus(payload.status || 'Approved'),
     joiningDate: cleanString(payload.joiningDate) || formatDate(new Date()),
   };
-
-  if (payload.id) {
-    const updated = await Seller.findByIdAndUpdate(
-      payload.id,
-      { $set: data },
-      { returnDocument: 'after' },
-    ).lean();
-    return toDto(updated);
-  }
 
   const existing = await Seller.findOne({ vendorCode }).lean();
   if (existing) throw new Error('Vendor code already exists.');
@@ -230,6 +269,7 @@ async function saveSeller(payload) {
     ...data,
     approvalStatus: payload.approvalStatus || 'pending',
   });
+  await verifierService.ensureForVendor(created._id);
   return toDto(created.toObject());
 }
 
@@ -245,6 +285,11 @@ async function nextVendorCode() {
     return m ? Math.max(acc, parseInt(m[1], 10)) : acc;
   }, 0);
   return `VND${String(max + 1).padStart(4, '0')}`;
+}
+
+async function migrateVendorStatuses() {
+  await Seller.updateMany({ status: 'Active' }, { $set: { status: 'Approved' } });
+  await Seller.updateMany({ status: 'Inactive' }, { $set: { status: 'Deleted' } });
 }
 
 async function ensureSeedSellersIfEmpty() {
@@ -276,7 +321,7 @@ async function ensureSeedSellersIfEmpty() {
       productCategories: 'Tour',
       approvalStatus: 'approved',
       kycStatus: 'Verified',
-      status: 'Active',
+      status: 'Approved',
       approvedAt: new Date('2026-04-15'),
       approvedBy: 'admin',
       joiningDate: '2026-04-10',
@@ -291,7 +336,7 @@ async function ensureSeedSellersIfEmpty() {
       productCategories: 'Cake',
       approvalStatus: 'rejected',
       kycStatus: 'Rejected',
-      status: 'Inactive',
+      status: 'Deleted',
       rejectionReason: 'Incomplete KYC documentation',
       rejectedAt: new Date('2026-05-10'),
       rejectedBy: 'admin',
@@ -314,5 +359,7 @@ module.exports = {
   deleteSellerById,
   nextVendorCode,
   ensureSeedSellersIfEmpty,
+  migrateVendorStatuses,
+  normalizeVendorStatus,
   toDto,
 };

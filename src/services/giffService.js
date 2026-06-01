@@ -18,15 +18,16 @@ function normalizeFormat(raw) {
   return 'gif';
 }
 
-function slotFromSortOrder(sortOrder) {
-  const n = Number(sortOrder) || 0;
-  return n === 2 ? 2 : 1;
+function normalizeSortOrder(sortOrder) {
+  const n = Number(sortOrder);
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.floor(n);
 }
 
 function toAdminDto(doc) {
   const category = clean(doc.category).toLowerCase();
   const meta = getGiffCategory(category);
-  const sortOrder = slotFromSortOrder(doc.sortOrder);
+  const sortOrder = normalizeSortOrder(doc.sortOrder);
   return {
     id: String(doc._id),
     category,
@@ -41,14 +42,17 @@ function toAdminDto(doc) {
 
 function toPublicDto(doc) {
   const category = clean(doc.category).toLowerCase();
-  return {
+  const dto = {
     id: String(doc._id),
     category,
-    sortOrder: slotFromSortOrder(doc.sortOrder),
+    sortOrder: normalizeSortOrder(doc.sortOrder),
     imageUrl: doc.imageUrl || '',
     format: normalizeFormat(doc.format),
     isActive: !!doc.isActive,
   };
+  const productId = clean(doc.productId);
+  if (productId) dto.productId = productId;
+  return dto;
 }
 
 function isActiveNow(doc) {
@@ -71,7 +75,10 @@ function buildPayload(body, { partial = false } = {}) {
   }
   if (!partial || body.isActive != null) set('isActive', body.isActive !== false);
   if (!partial || body.sortOrder != null) {
-    updates.sortOrder = slotFromSortOrder(body.sortOrder);
+    updates.sortOrder = normalizeSortOrder(body.sortOrder);
+  }
+  if (!partial || body.productId != null) {
+    set('productId', clean(body.productId));
   }
 
   return updates;
@@ -152,11 +159,28 @@ async function deleteGiff(id) {
   return !!r;
 }
 
+async function ensureBgtViewMoreGiffBanners() {
+  const count = await Giff.countDocuments({ category: 'bgt-view-more-giff' });
+  if (count > 0) return { seeded: 0 };
+
+  const samples = [1, 2].map((n) => ({
+    category: 'bgt-view-more-giff',
+    imageUrl: `/uploads/bgt-view-more-giff-${n}.jpg`,
+    format: 'jpg',
+    sortOrder: n,
+    isActive: true,
+  }));
+
+  await Giff.insertMany(samples);
+  return { seeded: samples.length };
+}
+
 module.exports = {
   listGiffs,
   listPublicGiffs,
   createGiff,
   updateGiff,
   deleteGiff,
+  ensureBgtViewMoreGiffBanners,
   GIFF_CATEGORIES,
 };

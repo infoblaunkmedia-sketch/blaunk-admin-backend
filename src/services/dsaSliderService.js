@@ -1,14 +1,27 @@
 const DsaSlider = require('../models/DsaSlider');
 const mediaSlotConfigService = require('./mediaSlotConfigService');
 const dsaPayoutService = require('./dsaPayoutService');
+const dsaService = require('./dsaService');
+const planChargesService = require('./planChargesService');
+const dsaLimitService = require('./dsaLimitService');
+const matchCodeService = require('./matchCodeService');
 
-const ALLOWED_STATUSES = new Set(['Draft', 'Active', 'Inactive']);
+const ALLOWED_STATUSES = new Set(['Draft', 'Active', 'Inactive', 'Expired']);
+const UPLOAD_SOURCES = new Set(['vendor_direct', 'admin_3p']);
+
+function resolveUploadTracking(payload, dsaCode) {
+  const raw = cleanString(payload?.uploadSource).toLowerCase();
+  const uploadSource = UPLOAD_SOURCES.has(raw) ? raw : 'admin_3p';
+  if (uploadSource === 'vendor_direct') {
+    return { uploadSource, uploadedByDsaCode: null };
+  }
+  const empCode = cleanString(payload?.uploadedByDsaCode || dsaCode).toUpperCase();
+  return { uploadSource: 'admin_3p', uploadedByDsaCode: empCode || null };
+}
 const ALLOWED_MEDIA_TABS = new Set(['Slider', 'Explore', 'Trendy Star', 'Global Store', 'Exclusive', 'New Launch', 'GIFF', 'Tour Package']);
 const ALLOWED_SECTIONS = new Set(['HOMEPAGE', 'BGT', 'TOUR', 'STORE', 'CAKE', 'BOUTIQUE', 'LOGISTIC']);
 const ALLOWED_COUNTRIES = new Set(['India', 'Bahrain', 'Bhutan', 'Indonesia', 'Jordan', 'Malaysia', 'Maldives', 'Philippines', 'Singapore', 'Sri Lanka', 'Qatar', 'Thailand', 'UAE-Dubai', 'Vietnam']);
 const ALLOWED_CATEGORIES = new Set(['Banner', 'Product', 'Service', 'Offer', 'Event']);
-const PLAN_MONTHS = { 'Standard (2M)': 2, 'Silver (3M)': 3, 'Gold (6M)': 6, 'Platinum (1YR)': 12, 'Premium (1YR)': 12, 'Diamond (1YR)': 12 };
-const PLAN_NAMES = new Set(Object.keys(PLAN_MONTHS));
 
 function cleanString(v) { return String(v == null ? '' : v).trim(); }
 function parseDate(v) { if (!v) return null; const d = new Date(v); return Number.isNaN(d.getTime()) ? null : d; }
@@ -22,7 +35,7 @@ function addMonths(date, months) { const copy = new Date(date); copy.setMonth(co
 function occupiesSlot(doc) {
   if (!doc) return false;
   const st = cleanString(doc.status);
-  if (st === 'Inactive') return false;
+  if (st === 'Inactive' || st === 'Expired') return false;
   if (st !== 'Active' && st !== 'Draft') return false;
   const exp = doc.expiryDate ? new Date(doc.expiryDate) : null;
   if (exp && !Number.isNaN(exp.getTime()) && exp.getTime() < Date.now()) return false;
@@ -61,7 +74,7 @@ async function getSlotStatus({ mediaTab, section, country } = {}) {
   return { mediaTab: mt, section: sec, country: ctry, maxSlots, usedSlots };
 }
 
-function normalizePayload(payload, prev = null) {
+async function normalizePayload(payload, prev = null) {
   const mediaTab = cleanString(payload.mediaTab || prev?.mediaTab || 'Slider');
   if (!ALLOWED_MEDIA_TABS.has(mediaTab)) throw new Error('mediaTab is invalid');
 
@@ -81,8 +94,10 @@ function normalizePayload(payload, prev = null) {
   const matchCode = cleanString(payload.matchCode || prev?.matchCode || '');
   if (!matchCode) throw new Error('matchCode is required');
 
-  const plan = cleanString(payload.plan || prev?.plan || 'Standard (2M)');
-  if (!PLAN_NAMES.has(plan)) throw new Error('plan is invalid');
+  const rawPlan = cleanString(payload.plan || prev?.plan || '');
+  const canonicalPlan = planChargesService.resolvePlanName(rawPlan);
+  const durationMonths = await planChargesService.getDurationMonthsForPlan(rawPlan);
+  if (!durationMonths) throw new Error('Invalid plan selected');
 
   const productId = cleanString(payload.productId || prev?.productId || '');
 
@@ -93,26 +108,64 @@ function normalizePayload(payload, prev = null) {
   if (toPay < 0) throw new Error('discount cannot exceed planCharge + luxuryFees');
 
   const status = cleanString(payload.status || prev?.status || 'Draft');
-  if (!ALLOWED_STATUSES.has(status)) throw new Error('status must be Draft, Active or Inactive');
+  if (!ALLOWED_STATUSES.has(status)) throw new Error('status must be Draft, Active, Inactive or Expired');
 
-  const uploadDate = parseDate(payload.uploadDate) || prev?.uploadDate || new Date();
-  const expiryDate = parseDate(payload.expiryDate) || addMonths(uploadDate, PLAN_MONTHS[plan]);
+  const uploadDate = prev?.uploadDate || new Date();
+  const expiryDate = addMonths(uploadDate, durationMonths);
   if (expiryDate < uploadDate) throw new Error('expiryDate cannot be earlier than uploadDate');
 
-  return { mediaTab, imageUrl, section, country, category, plan, productId, matchCode, planCharge, luxuryFees, discount, toPay, status, uploadDate, expiryDate };
+  return {
+    mediaTab,
+    imageUrl,
+    section,
+    country,
+    category,
+    plan: canonicalPlan || rawPlan,
+    productId,
+    matchCode,
+    planCharge,
+    luxuryFees,
+    discount,
+    toPay,
+    status,
+    uploadDate,
+    expiryDate,
+  };
 }
 
-async function listSliders({ mediaTab, section, country, status, q, dsaCode, limit = 200 } = {}) {
+async function listSliders({
+  mediaTab,
+  section,
+  country,
+  status,
+  q,
+  dsaCode,
+  limit = 200,
+  adminPanelOnly = false,
+} = {}) {
   const query = {};
   if (cleanString(mediaTab)) query.mediaTab = cleanString(mediaTab);
   if (cleanString(section)) query.section = cleanString(section).toUpperCase();
   if (cleanString(country)) query.country = cleanString(country);
-  if (cleanString(dsaCode)) query.dsaCode = cleanString(dsaCode).toUpperCase();
+  const codeFilter = cleanString(dsaCode).toUpperCase();
+  if (codeFilter) query.dsaCode = codeFilter;
   if (cleanString(status) && ALLOWED_STATUSES.has(cleanString(status))) query.status = cleanString(status);
   if (cleanString(q)) {
     const needle = cleanString(q);
     query.$or = [{ productId: { $regex: needle, $options: 'i' } }, { dsaCode: { $regex: needle, $options: 'i' } }];
   }
+
+  if (adminPanelOnly) {
+    const websiteCodes = await dsaService.getWebsiteDsaCodes();
+    if (websiteCodes.length) {
+      if (codeFilter) {
+        if (websiteCodes.includes(codeFilter)) return [];
+      } else {
+        query.dsaCode = { $nin: websiteCodes };
+      }
+    }
+  }
+
   const safeLimit = Math.min(Math.max(parseInt(String(limit), 10) || 200, 1), 1000);
   return (await DsaSlider.find(query).sort({ updatedAt: -1 }).limit(safeLimit).lean()) || [];
 }
@@ -120,9 +173,21 @@ async function listSliders({ mediaTab, section, country, status, q, dsaCode, lim
 async function getSliderById(id) { return DsaSlider.findById(id).lean(); }
 
 async function createSlider(payload) {
-  const set = normalizePayload(payload);
-  const dsaCode = cleanString(payload?.dsaCode || '');
+  const matchCode = cleanString(payload?.matchCode);
+  const validCode = await matchCodeService.validateCode(matchCode);
+  if (!validCode) throw new Error('Match code is invalid');
+
+  const set = await normalizePayload(payload);
+  const dsaCode = cleanString(payload?.dsaCode || '').toUpperCase();
   if (!dsaCode) throw new Error('dsaCode is required');
+  const tracking = resolveUploadTracking(payload, dsaCode);
+  if (tracking.uploadSource === 'admin_3p') {
+    const allowed = await dsaService.isAdminPanelDsa(dsaCode);
+    if (!allowed) {
+      throw new Error('DSA is not authorized for admin panel uploads.');
+    }
+  }
+  await dsaLimitService.assertUploadAllowed(dsaCode);
   const willOccupy = occupiesSlot({ ...set, _id: null });
   await assertSlotAvailable({
     mediaTab: set.mediaTab,
@@ -131,16 +196,26 @@ async function createSlider(payload) {
     excludeId: null,
     willOccupy,
   });
-  const doc = await DsaSlider.create({ ...set, dsaCode });
+  const doc = await DsaSlider.create({ ...set, dsaCode, ...tracking });
   return doc.toObject();
 }
 
 async function updateSlider(id, payload) {
   const prev = await DsaSlider.findById(id).lean();
   if (!prev) return null;
-  const set = normalizePayload(payload, prev);
-  const dsaCode = cleanString(payload?.dsaCode || prev.dsaCode || '');
+  const set = await normalizePayload(payload, prev);
+  const dsaCode = cleanString(payload?.dsaCode || prev.dsaCode || '').toUpperCase();
   if (!dsaCode) throw new Error('dsaCode is required');
+  const tracking = resolveUploadTracking(
+    { uploadSource: payload?.uploadSource ?? prev.uploadSource, uploadedByDsaCode: payload?.uploadedByDsaCode ?? prev.uploadedByDsaCode },
+    dsaCode,
+  );
+  if (tracking.uploadSource === 'admin_3p') {
+    const allowed = await dsaService.isAdminPanelDsa(dsaCode);
+    if (!allowed) {
+      throw new Error('DSA is not authorized for admin panel uploads.');
+    }
+  }
   const willOccupy = occupiesSlot({ ...set, _id: id });
   await assertSlotAvailable({
     mediaTab: set.mediaTab,
@@ -151,7 +226,7 @@ async function updateSlider(id, payload) {
   });
   return DsaSlider.findOneAndUpdate(
     { _id: id },
-    { $set: { ...set, dsaCode } },
+    { $set: { ...set, dsaCode, ...tracking } },
     { returnDocument: 'after', runValidators: true },
   ).lean();
 }

@@ -1,6 +1,7 @@
 /** CMS GIFF categories — slug, label, max uploads per category. */
 const GIFF_CATEGORIES = [
   { id: 'home-page-cake-giff', label: 'HOME PAGE CAKE - GIFF', maxRecords: 2 },
+  { id: 'bgt-view-more-giff', label: 'BGT VIEW MORE - GIFF', maxRecords: 2 },
   { id: 'connect-page-giff', label: 'CONNECT PAGE - GIFF', maxRecords: 2 },
   { id: 'boutique-page-giff', label: 'BOUTIQUE PAGE - GIFF', maxRecords: 1 },
   { id: 'bgt-home-page-giff', label: 'BGT HOME PAGE - GIFF', maxRecords: 1 },
