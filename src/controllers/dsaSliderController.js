@@ -92,6 +92,9 @@ async function createSliderController(req, res) {
       body.uploadedByDsaCode = null;
     } else {
       body.uploadSource = body.uploadSource || 'admin_3p';
+      if (isAdminUser(req.user)) {
+        body.bypassAdminPanelDsaCheck = true;
+      }
     }
     const record = await dsaSliderService.createSlider(body);
     return res.status(201).json({ record });
@@ -120,6 +123,8 @@ async function updateSliderController(req, res) {
     const body = { ...(req.body || {}) };
     if (is3pUser(req.user)) {
       body.dsaCode = ownDsaCode(req);
+    } else if (isAdminUser(req.user)) {
+      body.bypassAdminPanelDsaCheck = true;
     }
     const record = await dsaSliderService.updateSlider(id, body);
     if (!record) return res.status(404).json({ message: 'Slider not found.' });

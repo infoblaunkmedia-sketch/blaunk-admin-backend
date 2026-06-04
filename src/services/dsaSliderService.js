@@ -181,7 +181,8 @@ async function createSlider(payload) {
   const dsaCode = cleanString(payload?.dsaCode || '').toUpperCase();
   if (!dsaCode) throw new Error('dsaCode is required');
   const tracking = resolveUploadTracking(payload, dsaCode);
-  if (tracking.uploadSource === 'admin_3p') {
+  const skipAdminPanelDsaCheck = payload?.bypassAdminPanelDsaCheck === true;
+  if (tracking.uploadSource === 'admin_3p' && !skipAdminPanelDsaCheck) {
     const allowed = await dsaService.isAdminPanelDsa(dsaCode);
     if (!allowed) {
       throw new Error('DSA is not authorized for admin panel uploads.');
@@ -213,7 +214,8 @@ async function updateSlider(id, payload) {
     { uploadSource: payload?.uploadSource ?? prev.uploadSource, uploadedByDsaCode: payload?.uploadedByDsaCode ?? prev.uploadedByDsaCode },
     dsaCode,
   );
-  if (tracking.uploadSource === 'admin_3p') {
+  const skipAdminPanelDsaCheck = payload?.bypassAdminPanelDsaCheck === true;
+  if (tracking.uploadSource === 'admin_3p' && !skipAdminPanelDsaCheck) {
     const allowed = await dsaService.isAdminPanelDsa(dsaCode);
     if (!allowed) {
       throw new Error('DSA is not authorized for admin panel uploads.');
