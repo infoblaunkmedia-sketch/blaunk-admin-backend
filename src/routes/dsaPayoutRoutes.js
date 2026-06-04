@@ -9,6 +9,7 @@ const {
   approvePayoutController,
   rejectPayoutController,
   updatePayoutStatusController,
+  updatePayoutFieldsController,
 } = require('../controllers/dsaPayoutController');
 const { ledgerController } = require('../controllers/referralController');
 
@@ -23,6 +24,7 @@ const payoutAccess = [
 router.get('/ledger', payoutAccess, ledgerController);
 router.get('/', payoutAccess, scopeDsaCodeQuery, listPayoutsController);
 router.post('/', payoutAccess, createPayoutController);
+router.patch('/:id/fields', authMiddleware, requireAdmin, updatePayoutFieldsController);
 router.patch('/:id/status', authMiddleware, requireAdmin, updatePayoutStatusController);
 router.patch('/:id/approve', authMiddleware, requireAdmin, approvePayoutController);
 router.patch('/:id/reject', authMiddleware, requireAdmin, rejectPayoutController);

@@ -41,7 +41,7 @@ async function reviewVerifierController(req, res) {
   const { vendorId } = req.params || {};
   if (!vendorId) return res.status(400).json({ message: 'vendorId is required.' });
   if (!(await userCanReview(req))) {
-    return res.status(403).json({ message: 'Checker access required (Admin or Admin Personnel).' });
+    return res.status(403).json({ message: 'Cheker access required (Admin or Admin Personnel).' });
   }
   try {
     const record = await verifierService.reviewVerification(

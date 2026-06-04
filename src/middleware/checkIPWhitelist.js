@@ -54,6 +54,8 @@ function shouldBypassWhitelist(req) {
   if (path.startsWith('/api/banners/public')) return true;
   if (path.startsWith('/api/giff/public')) return true;
   if (path.startsWith('/api/site-media/public')) return true;
+  if (path.startsWith('/api/contest-quiz/public')) return true;
+  if (path.startsWith('/api/vacancies/public')) return true;
   if (path.startsWith('/api/testimonials/public')) return true;
   if (path === '/api/testimonials' && method === 'GET') return true;
   if (path === '/api/referrals/track' && method === 'POST') return true;

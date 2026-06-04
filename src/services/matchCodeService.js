@@ -5,11 +5,16 @@ function cleanString(v) {
   return String(v == null ? '' : v).trim();
 }
 
+/** Digits-only match code (5-digit codes from generateNew). */
+function normalizeMatchCode(v) {
+  return cleanString(v).replace(/\D/g, '');
+}
+
 function toEntry(doc) {
   if (!doc) return null;
   return {
     _id: String(doc._id),
-    code: cleanString(doc.code),
+    code: normalizeMatchCode(doc.code) || cleanString(doc.code),
     generatedBy: cleanString(doc.generatedBy),
     generatedAt: doc.createdAt,
     isActive: !!doc.isActive,
@@ -60,10 +65,11 @@ async function generateNew(generatedBy) {
 }
 
 async function validateCode(code) {
-  const normalized = cleanString(code);
+  const normalized = normalizeMatchCode(code);
   if (!normalized) return false;
   const active = await getActive();
-  return !!active && active.code === normalized;
+  if (!active?.code) return false;
+  return normalizeMatchCode(active.code) === normalized;
 }
 
 module.exports = {

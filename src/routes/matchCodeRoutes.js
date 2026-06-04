@@ -25,7 +25,11 @@ const matchAdminGuard = [
 const matchReadGuard = [
   authMiddleware,
   requireRole(ROLES.ADMIN, ROLES.EMP, ROLES.THREE_P),
-  requireAnySectionOr3p([['channelPartners', 'dsa'], ...matchSectionPairs]),
+  requireAnySectionOr3p([
+    ['channelPartners', 'dsa'],
+    ['marketing', 'media-ads'],
+    ...matchSectionPairs,
+  ]),
 ];
 
 router.get('/history', matchAdminGuard, listHistoryController);

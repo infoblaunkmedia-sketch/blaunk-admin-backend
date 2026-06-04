@@ -66,6 +66,23 @@ async function rejectPayoutController(req, res) {
   }
 }
 
+async function updatePayoutFieldsController(req, res) {
+  const { id } = req.params || {};
+  if (!id) return res.status(400).json({ message: 'id is required.' });
+  try {
+    const record = await dsaPayoutService.updatePayoutFieldsById(id, {
+      currencyInr: req.body?.currencyInr,
+      calculatedLimit: req.body?.calculatedLimit,
+    });
+    if (!record) return res.status(404).json({ message: 'Payout not found.' });
+    return res.json({ record });
+  } catch (error) {
+    const msg = String(error?.message || '');
+    const code = msg.toLowerCase().includes('must') ? 400 : 500;
+    return res.status(code).json({ message: msg || 'Failed to update payout.' });
+  }
+}
+
 async function updatePayoutStatusController(req, res) {
   const { id } = req.params || {};
   if (!id) return res.status(400).json({ message: 'id is required.' });
@@ -92,5 +109,6 @@ module.exports = {
   createPayoutController,
   approvePayoutController,
   rejectPayoutController,
+  updatePayoutFieldsController,
   updatePayoutStatusController,
 };

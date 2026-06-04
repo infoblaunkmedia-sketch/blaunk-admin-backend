@@ -203,6 +203,9 @@ async function createSlider(payload) {
 async function updateSlider(id, payload) {
   const prev = await DsaSlider.findById(id).lean();
   if (!prev) return null;
+  const matchCode = cleanString(payload?.matchCode || prev?.matchCode || '');
+  const validCode = await matchCodeService.validateCode(matchCode);
+  if (!validCode) throw new Error('Match code is invalid');
   const set = await normalizePayload(payload, prev);
   const dsaCode = cleanString(payload?.dsaCode || prev.dsaCode || '').toUpperCase();
   if (!dsaCode) throw new Error('dsaCode is required');

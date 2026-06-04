@@ -5,8 +5,21 @@ function cleanString(v) {
 }
 
 async function nextVacancyId() {
-  const count = await Vacancy.countDocuments();
-  return `VAC-${String(count + 1).padStart(5, '0')}`;
+  const rows = await Vacancy.find({ vacancyId: /^VAC-/i }, { vacancyId: 1 }).lean();
+  let max = 0;
+  for (const row of rows) {
+    const match = String(row.vacancyId || '').match(/VAC-(\d+)/i);
+    if (match) max = Math.max(max, parseInt(match[1], 10));
+  }
+  return `VAC-${String(max + 1).padStart(5, '0')}`;
+}
+
+function formatPackageLpa(value) {
+  const raw = cleanString(value);
+  if (!raw) return '';
+  if (/lpa/i.test(raw)) return raw;
+  if (/^\d+(\.\d+)?$/.test(raw)) return `${raw} LPA`;
+  return raw;
 }
 
 function toDto(doc) {
@@ -14,31 +27,49 @@ function toDto(doc) {
   return {
     id: String(doc._id),
     jobTitle: doc.jobTitle || '',
-    department: doc.department || '',
-    numberOfOpenings: Number(doc.numberOfOpenings || 0),
-    description: doc.description || '',
     requiredExperience: doc.requiredExperience || '',
     location: doc.location || '',
-    postedDate: doc.postedDate || '',
+    packageLpa: doc.packageLpa || '',
+    qualification: doc.qualification || '',
+    applyEmail: doc.applyEmail || 'careers@blaunk.com',
+    numberOfOpenings: Number(doc.numberOfOpenings || 0),
     status: doc.status || 'Open',
+    vacancyId: doc.vacancyId || '',
+    // legacy fields kept for older records / reports
+    department: doc.department || '',
+    description: doc.description || '',
+    postedDate: doc.postedDate || '',
     type: doc.type || 'Full Time',
     closingDate: doc.closingDate || '',
-    vacancyId: doc.vacancyId || '',
   };
 }
 
-async function listVacancies({ department, status, q, limit = 500 } = {}) {
+async function listVacancies({ department, status, q, limit = 500, publicOnly = false } = {}) {
   const query = {};
+  if (publicOnly) {
+    query.status = 'Open';
+  } else if (status) {
+    query.status = status;
+  }
   if (department) query.department = department;
-  if (status) query.status = status;
   const needle = cleanString(q);
   if (needle) {
     const re = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    query.$or = [{ jobTitle: re }, { department: re }, { location: re }];
+    query.$or = [
+      { jobTitle: re },
+      { location: re },
+      { requiredExperience: re },
+      { packageLpa: re },
+      { qualification: re },
+    ];
   }
   const safeLimit = Math.min(Math.max(parseInt(String(limit), 10) || 500, 1), 2000);
-  const rows = await Vacancy.find(query).sort({ postedDate: -1, createdAt: -1 }).limit(safeLimit).lean();
-  return rows.map(toDto);
+  const rows = await Vacancy.find(query).sort({ createdAt: -1 }).limit(safeLimit).lean();
+  return rows.map(toDto).filter(Boolean);
+}
+
+async function listPublicVacancies() {
+  return listVacancies({ publicOnly: true, limit: 200 });
 }
 
 async function getVacancyById(id) {
@@ -47,19 +78,32 @@ async function getVacancyById(id) {
 
 async function saveVacancy(payload) {
   const body = payload || {};
-  if (!body.jobTitle) throw new Error('jobTitle is required.');
+  if (!cleanString(body.jobTitle)) throw new Error('Role title is required.');
+  if (!cleanString(body.requiredExperience)) throw new Error('Experience is required.');
+  if (!cleanString(body.location)) throw new Error('Location is required.');
+  if (!cleanString(body.packageLpa)) throw new Error('Package LPA is required.');
+  if (!cleanString(body.qualification)) throw new Error('Qualification is required.');
+
+  const openings = Number(body.numberOfOpenings);
+  if (!Number.isFinite(openings) || openings < 1) {
+    throw new Error('Vacancies must be at least 1.');
+  }
+
+  const applyEmail = cleanString(body.applyEmail) || 'careers@blaunk.com';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(applyEmail)) {
+    throw new Error('Apply email must be a valid email address.');
+  }
 
   const set = {
     jobTitle: cleanString(body.jobTitle),
-    department: cleanString(body.department),
-    location: cleanString(body.location),
-    type: cleanString(body.type) || 'Full Time',
-    description: cleanString(body.description),
     requiredExperience: cleanString(body.requiredExperience),
-    numberOfOpenings: Number(body.numberOfOpenings || 1),
-    status: cleanString(body.status) || 'Open',
-    postedDate: cleanString(body.postedDate) || new Date().toISOString().slice(0, 10),
-    closingDate: cleanString(body.closingDate),
+    location: cleanString(body.location),
+    packageLpa: formatPackageLpa(body.packageLpa),
+    qualification: cleanString(body.qualification),
+    applyEmail,
+    numberOfOpenings: openings,
+    status: 'Open',
+    postedDate: new Date().toISOString().slice(0, 10),
   };
 
   let doc;
@@ -69,23 +113,35 @@ async function saveVacancy(payload) {
     doc = await Vacancy.findByIdAndUpdate(id, { $set: set }, { returnDocument: 'after' }).lean();
     if (!doc) throw new Error('Vacancy not found.');
   } else {
-    doc = (
-      await Vacancy.create({
-        ...set,
-        vacancyId: await nextVacancyId(),
-      })
-    ).toObject();
+    try {
+      doc = (
+        await Vacancy.create({
+          ...set,
+          vacancyId: await nextVacancyId(),
+        })
+      ).toObject();
+    } catch (err) {
+      if (err?.code === 11000) {
+        throw new Error('Could not create vacancy (duplicate reference). Please try again.');
+      }
+      throw err;
+    }
   }
   return toDto(doc);
 }
 
 async function deleteVacancyById(id) {
-  const res = await Vacancy.deleteOne({ _id: id });
-  return res.deletedCount || 0;
+  const cleanId = cleanString(id);
+  if (!/^[a-f\d]{24}$/i.test(cleanId)) {
+    throw new Error('Invalid vacancy id.');
+  }
+  const res = await Vacancy.findByIdAndDelete(cleanId);
+  return res ? 1 : 0;
 }
 
 module.exports = {
   listVacancies,
+  listPublicVacancies,
   getVacancyById,
   saveVacancy,
   deleteVacancyById,

@@ -3,7 +3,7 @@ const BOUTIQUE_BANNER_POSITIONS = ['hero', 'fashion-accessories', 'trendy-star',
 
 const BOUTIQUE_FASHION_ACCESSORIES_CHIP_COUNT = 5;
 const BOUTIQUE_TRENDY_STAR_CHIP_COUNT = 5;
-const BOUTIQUE_DISCLAIMER_UTILITY_CHIP_COUNT = 5;
+const BOUTIQUE_DISCLAIMER_UTILITY_CHIP_COUNT = 9;
 const BOUTIQUE_EDITORIAL_GALLERY_MAX = 8;
 
 const BOUTIQUE_HEADER_CARD_POSITIONS = new Set(['fashion-accessories', 'trendy-star', 'exclusive-video', 'disclaimer-utility']);

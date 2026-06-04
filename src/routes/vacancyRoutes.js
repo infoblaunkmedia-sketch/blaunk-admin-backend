@@ -1,15 +1,18 @@
 const express = require('express');
 const { authMiddleware } = require('../middleware/authMiddleware');
-const { requireRole, requireAdmin, ROLES } = require('../middleware/requireRole');
+const { requireRole, ROLES } = require('../middleware/requireRole');
 const { requireSection } = require('../middleware/requirePermission');
 const {
   listVacanciesController,
+  listPublicVacanciesController,
   getVacancyController,
   saveVacancyController,
   deleteVacancyController,
 } = require('../controllers/vacancyController');
 
 const router = express.Router();
+
+router.get('/public', listPublicVacanciesController);
 
 const vacancyRead = [
   authMiddleware,
@@ -18,7 +21,7 @@ const vacancyRead = [
 ];
 
 const vacancyWrite = [...vacancyRead];
-const vacancyDelete = [authMiddleware, requireAdmin, requireSection('people', 'vacancies')];
+const vacancyDelete = [...vacancyRead];
 
 router.get('/', vacancyRead, listVacanciesController);
 router.post('/', vacancyWrite, saveVacancyController);

@@ -17,8 +17,6 @@ function normalizeCreatePayload(payload) {
   if (!dsaCode) throw new Error('dsaCode is required');
   const submittedAmount = asNonNegativeNumber(payload?.submittedAmount ?? 0, 'submittedAmount');
   if (submittedAmount <= 0) throw new Error('submittedAmount must be greater than 0');
-  const currencyInr = asNonNegativeNumber(payload?.currencyInr ?? 0, 'currencyInr');
-  const calculatedLimit = asNonNegativeNumber(payload?.calculatedLimit ?? 0, 'calculatedLimit');
   const shareRatioRaw = Number(payload?.shareRatio ?? 30);
   const shareRatio = Number.isFinite(shareRatioRaw) ? Math.max(0, Math.min(100, shareRatioRaw)) : 30;
 
@@ -28,9 +26,9 @@ function normalizeCreatePayload(payload) {
     country: cleanString(payload?.country),
     submittedAmount,
     currency: cleanString(payload?.currency || 'INR') || 'INR',
-    currencyInr,
+    currencyInr: null,
     shareRatio,
-    calculatedLimit,
+    calculatedLimit: null,
     mode: cleanString(payload?.mode || 'NEFT') || 'NEFT',
     transactionNumber: cleanString(payload?.transactionNumber),
     submissionDate: cleanString(payload?.submissionDate),
@@ -79,11 +77,18 @@ async function updatePayoutStatusById(id, statusInput, note, actedBy) {
 
   const actor = cleanString(actedBy);
   const noteText = cleanString(note);
-  const patch = { status };
+  const patch = {
+    status,
+    lastActedBy: actor,
+    lastActedAt: new Date(),
+  };
 
   if (status === STATUS.APPROVED) {
+    const limitBase = Number(rec.calculatedLimit || 0) > 0
+      ? Number(rec.calculatedLimit || 0)
+      : Number(rec.newAmount || 0) + Number(rec.bodBalance || 0);
     const availableBalance = Number(
-      ((Number(rec.newAmount || 0) + Number(rec.bodBalance || 0) - Number(rec.usedValue || 0))).toFixed(2),
+      (limitBase - Number(rec.usedValue || 0)).toFixed(2),
     );
     Object.assign(patch, {
       approvalNote: noteText,
@@ -136,6 +141,20 @@ async function rejectPayoutById(id, reason, actedBy) {
   return updatePayoutStatusById(id, STATUS.REJECTED, reason, actedBy);
 }
 
+async function updatePayoutFieldsById(id, fields = {}) {
+  const rec = await DsaPayout.findById(id).lean();
+  if (!rec) return null;
+  const patch = {};
+  if (fields.currencyInr != null) {
+    patch.currencyInr = asNonNegativeNumber(fields.currencyInr, 'currencyInr');
+  }
+  if (fields.calculatedLimit != null) {
+    patch.calculatedLimit = asNonNegativeNumber(fields.calculatedLimit, 'calculatedLimit');
+  }
+  if (!Object.keys(patch).length) return rec;
+  return DsaPayout.findOneAndUpdate({ _id: id }, { $set: patch }, { returnDocument: 'after' }).lean();
+}
+
 async function getApprovedAvailableBalanceForDsa(dsaCode) {
   const code = cleanString(dsaCode).toUpperCase();
   if (!code) return 0;
@@ -150,6 +169,7 @@ module.exports = {
   STATUS,
   listPayouts,
   createPayout,
+  updatePayoutFieldsById,
   updatePayoutStatusById,
   approvePayoutById,
   rejectPayoutById,

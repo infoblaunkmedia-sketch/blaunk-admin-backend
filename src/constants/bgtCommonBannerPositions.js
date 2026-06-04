@@ -24,7 +24,7 @@ const BGT_COMMON_MAX_RECORDS = {
   'explore-gallery': 4,
   'explorer-carousel': 4,
   'international-sourcing-banner': 3,
-  'blaunk-advantage': 7,
+  'blaunk-advantage': 7, // 1 intro header + 6 exporter posters
   'view-more-hero': 3,
   'view-more-sponsored-ads': 3,
   'view-more-premium-showcase': 3,

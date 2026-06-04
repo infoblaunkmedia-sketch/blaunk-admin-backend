@@ -9,6 +9,16 @@ async function listVacanciesController(req, res) {
   }
 }
 
+async function listPublicVacanciesController(req, res) {
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    const records = await vacancyService.listPublicVacancies();
+    return res.json({ records });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to load vacancies.' });
+  }
+}
+
 async function getVacancyController(req, res) {
   try {
     const record = await vacancyService.getVacancyById(req.params.id);
@@ -36,12 +46,15 @@ async function deleteVacancyController(req, res) {
     if (!deleted) return res.status(404).json({ message: 'Vacancy not found.' });
     return res.json({ deleted: true });
   } catch (error) {
-    return res.status(500).json({ message: 'Failed to delete vacancy.' });
+    const msg = String(error?.message || 'Failed to delete vacancy.');
+    const status = msg.includes('Invalid') ? 400 : 500;
+    return res.status(status).json({ message: msg });
   }
 }
 
 module.exports = {
   listVacanciesController,
+  listPublicVacanciesController,
   getVacancyController,
   saveVacancyController,
   deleteVacancyController,
