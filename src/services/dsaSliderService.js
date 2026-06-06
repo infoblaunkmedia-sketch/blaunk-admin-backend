@@ -1,10 +1,10 @@
 const DsaSlider = require('../models/DsaSlider');
-const mediaSlotConfigService = require('./mediaSlotConfigService');
 const dsaPayoutService = require('./dsaPayoutService');
 const dsaService = require('./dsaService');
 const planChargesService = require('./planChargesService');
-const dsaLimitService = require('./dsaLimitService');
 const matchCodeService = require('./matchCodeService');
+const cmsPlacements = require('../constants/cmsBannerPlacements');
+const giffPlacement = require('./giffPlacementService');
 
 const ALLOWED_STATUSES = new Set(['Draft', 'Active', 'Inactive', 'Expired']);
 const UPLOAD_SOURCES = new Set(['vendor_direct', 'admin_3p']);
@@ -19,8 +19,38 @@ function resolveUploadTracking(payload, dsaCode) {
   return { uploadSource: 'admin_3p', uploadedByDsaCode: empCode || null };
 }
 const ALLOWED_MEDIA_TABS = new Set(['Slider', 'Explore', 'Trendy Star', 'Global Store', 'Exclusive', 'New Launch', 'GIFF', 'Tour Package']);
-const ALLOWED_SECTIONS = new Set(['HOMEPAGE', 'BGT', 'TOUR', 'STORE', 'CAKE', 'BOUTIQUE', 'LOGISTIC']);
 const ALLOWED_COUNTRIES = new Set(['India', 'Bahrain', 'Bhutan', 'Indonesia', 'Jordan', 'Malaysia', 'Maldives', 'Philippines', 'Singapore', 'Sri Lanka', 'Qatar', 'Thailand', 'UAE-Dubai', 'Vietnam']);
+
+function withResolvedPlacement(doc) {
+  if (!doc) return doc;
+  const row = { ...doc };
+  if (cleanString(row.cmsPage) && cleanString(row.cmsPosition)) return row;
+  const migrated = cmsPlacements.migrateLegacySection(row.section);
+  if (migrated) {
+    row.cmsPage = migrated.cmsPage;
+    row.cmsPosition = migrated.cmsPosition;
+  }
+  return row;
+}
+
+function buildPlacementQuery({ cmsPage, cmsPosition, section, mediaTab, country, dsaCode, status, q, excludeId } = {}) {
+  const query = {};
+  const placement = cmsPlacements.resolvePlacement({ cmsPage, cmsPosition, section });
+  if (placement) {
+    Object.assign(query, cmsPlacements.placementQueryOr(placement));
+  } else if (cleanString(section)) {
+    query.section = cleanString(section).toUpperCase();
+  }
+  if (cleanString(mediaTab)) query.mediaTab = cleanString(mediaTab);
+  if (cleanString(country)) query.country = cleanString(country);
+  if (cleanString(dsaCode)) query.dsaCode = cleanString(dsaCode).toUpperCase();
+  if (cleanString(status) && ALLOWED_STATUSES.has(cleanString(status))) query.status = cleanString(status);
+  if (cleanString(q)) {
+    const needle = cleanString(q);
+    query.$or = [{ productId: { $regex: needle, $options: 'i' } }, { dsaCode: { $regex: needle, $options: 'i' } }];
+  }
+  return { query, placement, excludeId };
+}
 const ALLOWED_CATEGORIES = new Set(['Banner', 'Product', 'Service', 'Offer', 'Event']);
 
 function cleanString(v) { return String(v == null ? '' : v).trim(); }
@@ -42,36 +72,67 @@ function occupiesSlot(doc) {
   return true;
 }
 
-async function countOccupiedSlots({ mediaTab, section, country, excludeId } = {}) {
-  const mt = cleanString(mediaTab);
-  const sec = cleanString(section).toUpperCase();
-  const ctry = cleanString(country);
-  const query = { mediaTab: mt, section: sec, country: ctry };
-  const docs = (await DsaSlider.find(query).select('_id status expiryDate').lean()) || [];
+async function countOccupiedSlots({ mediaTab, cmsPage, cmsPosition, section, country, excludeId } = {}) {
+  const placement = cmsPlacements.resolvePlacement({ cmsPage, cmsPosition, section });
+  if (placement?.cmsPage === 'giff') {
+    return giffPlacement.countOccupiedGiffCategory(placement.cmsPosition, { excludeId });
+  }
+  const { query, placement: resolved } = buildPlacementQuery({ mediaTab, cmsPage, cmsPosition, section, country });
+  if (!resolved && !query.section) return 0;
+  const docs = (await DsaSlider.find(query).select('_id status expiryDate cmsPage cmsPosition section').lean()) || [];
   let n = 0;
   for (const d of docs) {
     if (excludeId && String(d._id) === String(excludeId)) continue;
+    if (resolved) {
+      const row = withResolvedPlacement(d);
+      if (row.cmsPage !== resolved.cmsPage || row.cmsPosition !== resolved.cmsPosition) continue;
+    }
     if (occupiesSlot(d)) n += 1;
   }
   return n;
 }
 
-async function assertSlotAvailable({ mediaTab, section, country, excludeId, willOccupy }) {
+async function assertSlotAvailable({ mediaTab, cmsPage, cmsPosition, section, country, excludeId, willOccupy }) {
   if (!willOccupy) return;
-  const maxSlots = await mediaSlotConfigService.getMaxSlotsForTab(mediaTab);
-  const used = await countOccupiedSlots({ mediaTab, section, country, excludeId });
+  const placement = cmsPlacements.resolvePlacement({ cmsPage, cmsPosition, section });
+  if (!placement) throw new Error('Invalid CMS placement.');
+  const maxSlots = cmsPlacements.maxSlotsForPlacement(placement.cmsPage, placement.cmsPosition);
+  const used = await countOccupiedSlots({
+    mediaTab,
+    cmsPage: placement.cmsPage,
+    cmsPosition: placement.cmsPosition,
+    country,
+    excludeId,
+  });
   if (used >= maxSlots) {
-    throw new Error('All slots are full for this section.');
+    throw new Error('All slots are full for this placement.');
   }
 }
 
-async function getSlotStatus({ mediaTab, section, country } = {}) {
+async function getSlotStatus({ mediaTab, cmsPage, cmsPosition, section, country } = {}) {
   const mt = cleanString(mediaTab) || 'Slider';
-  const sec = cleanString(section).toUpperCase() || 'HOMEPAGE';
   const ctry = cleanString(country) || 'India';
-  const maxSlots = await mediaSlotConfigService.getMaxSlotsForTab(mt);
-  const usedSlots = await countOccupiedSlots({ mediaTab: mt, section: sec, country: ctry });
-  return { mediaTab: mt, section: sec, country: ctry, maxSlots, usedSlots };
+  const placement = cmsPlacements.resolvePlacement({ cmsPage, cmsPosition, section })
+    || { cmsPage: 'home', cmsPosition: 'hero' };
+  const maxSlots = cmsPlacements.maxSlotsForPlacement(placement.cmsPage, placement.cmsPosition);
+  const usedSlots = await countOccupiedSlots({
+    mediaTab: mt,
+    cmsPage: placement.cmsPage,
+    cmsPosition: placement.cmsPosition,
+    country: ctry,
+  });
+  const legacySection = cmsPlacements.legacySectionFromPlacement(placement.cmsPage, placement.cmsPosition);
+  return {
+    mediaTab: mt,
+    cmsPage: placement.cmsPage,
+    cmsPosition: placement.cmsPosition,
+    pageLabel: cmsPlacements.pageLabel(placement.cmsPage),
+    slotLabel: cmsPlacements.slotLabel(placement.cmsPage, placement.cmsPosition),
+    section: legacySection,
+    country: ctry,
+    maxSlots,
+    usedSlots,
+  };
 }
 
 async function normalizePayload(payload, prev = null) {
@@ -81,8 +142,12 @@ async function normalizePayload(payload, prev = null) {
   const imageUrl = cleanString(payload.imageUrl || prev?.imageUrl);
   if (!imageUrl) throw new Error('imageUrl is required');
 
-  const section = cleanString(payload.section || prev?.section || 'HOMEPAGE').toUpperCase();
-  if (!ALLOWED_SECTIONS.has(section)) throw new Error('section is invalid');
+  const placement = cmsPlacements.resolvePlacement({
+    cmsPage: payload.cmsPage ?? prev?.cmsPage,
+    cmsPosition: payload.cmsPosition ?? prev?.cmsPosition,
+    section: payload.section ?? prev?.section,
+  });
+  if (!placement) throw new Error('Invalid CMS page or slot.');
 
   const country = cleanString(payload.country || prev?.country || 'India');
   if (!ALLOWED_COUNTRIES.has(country)) throw new Error('country is invalid');
@@ -114,9 +179,30 @@ async function normalizePayload(payload, prev = null) {
   const expiryDate = addMonths(uploadDate, durationMonths);
   if (expiryDate < uploadDate) throw new Error('expiryDate cannot be earlier than uploadDate');
 
+  const section = cmsPlacements.legacySectionFromPlacement(placement.cmsPage, placement.cmsPosition);
+
+  const isGiff = placement.cmsPage === 'giff';
+  const resolvedMediaTab = isGiff ? 'GIFF' : mediaTab;
+
+  let giffFormat = '';
+  let giffSortOrder = 1;
+  if (isGiff) {
+    giffFormat = giffPlacement.assertGiffFormat(payload?.giffFormat ?? prev?.giffFormat ?? 'gif');
+    const requestedOrder = Number(payload?.giffSortOrder ?? prev?.giffSortOrder);
+    if (Number.isFinite(requestedOrder) && requestedOrder >= 1) {
+      giffSortOrder = Math.floor(requestedOrder);
+    } else if (!prev) {
+      giffSortOrder = await giffPlacement.nextAvailableGiffSortOrder(placement.cmsPosition);
+    } else {
+      giffSortOrder = Number(prev.giffSortOrder) || 1;
+    }
+  }
+
   return {
-    mediaTab,
+    mediaTab: resolvedMediaTab,
     imageUrl,
+    cmsPage: placement.cmsPage,
+    cmsPosition: placement.cmsPosition,
     section,
     country,
     category,
@@ -130,11 +216,15 @@ async function normalizePayload(payload, prev = null) {
     status,
     uploadDate,
     expiryDate,
+    giffFormat,
+    giffSortOrder,
   };
 }
 
 async function listSliders({
   mediaTab,
+  cmsPage,
+  cmsPosition,
   section,
   country,
   status,
@@ -143,17 +233,8 @@ async function listSliders({
   limit = 200,
   adminPanelOnly = false,
 } = {}) {
-  const query = {};
-  if (cleanString(mediaTab)) query.mediaTab = cleanString(mediaTab);
-  if (cleanString(section)) query.section = cleanString(section).toUpperCase();
-  if (cleanString(country)) query.country = cleanString(country);
+  const { query } = buildPlacementQuery({ mediaTab, cmsPage, cmsPosition, section, country, status, q, dsaCode });
   const codeFilter = cleanString(dsaCode).toUpperCase();
-  if (codeFilter) query.dsaCode = codeFilter;
-  if (cleanString(status) && ALLOWED_STATUSES.has(cleanString(status))) query.status = cleanString(status);
-  if (cleanString(q)) {
-    const needle = cleanString(q);
-    query.$or = [{ productId: { $regex: needle, $options: 'i' } }, { dsaCode: { $regex: needle, $options: 'i' } }];
-  }
 
   if (adminPanelOnly) {
     const websiteCodes = await dsaService.getWebsiteDsaCodes();
@@ -167,10 +248,14 @@ async function listSliders({
   }
 
   const safeLimit = Math.min(Math.max(parseInt(String(limit), 10) || 200, 1), 1000);
-  return (await DsaSlider.find(query).sort({ updatedAt: -1 }).limit(safeLimit).lean()) || [];
+  const rows = (await DsaSlider.find(query).sort({ updatedAt: -1 }).limit(safeLimit).lean()) || [];
+  return rows.map(withResolvedPlacement);
 }
 
-async function getSliderById(id) { return DsaSlider.findById(id).lean(); }
+async function getSliderById(id) {
+  const doc = await DsaSlider.findById(id).lean();
+  return withResolvedPlacement(doc);
+}
 
 async function createSlider(payload) {
   const matchCode = cleanString(payload?.matchCode);
@@ -188,11 +273,11 @@ async function createSlider(payload) {
       throw new Error('DSA is not authorized for admin panel uploads.');
     }
   }
-  await dsaLimitService.assertUploadAllowed(dsaCode);
   const willOccupy = occupiesSlot({ ...set, _id: null });
   await assertSlotAvailable({
     mediaTab: set.mediaTab,
-    section: set.section,
+    cmsPage: set.cmsPage,
+    cmsPosition: set.cmsPosition,
     country: set.country,
     excludeId: null,
     willOccupy,
@@ -224,7 +309,8 @@ async function updateSlider(id, payload) {
   const willOccupy = occupiesSlot({ ...set, _id: id });
   await assertSlotAvailable({
     mediaTab: set.mediaTab,
-    section: set.section,
+    cmsPage: set.cmsPage,
+    cmsPosition: set.cmsPosition,
     country: set.country,
     excludeId: id,
     willOccupy,
@@ -241,29 +327,62 @@ async function deleteSlider(id) {
   return res.deletedCount || 0;
 }
 
-async function listActiveBySlot({ mediaTab = 'Slider', section = 'HOMEPAGE', country } = {}) {
+async function listActiveBySlot({
+  mediaTab = 'Slider',
+  cmsPage,
+  cmsPosition,
+  section,
+  country,
+} = {}) {
+  const placement = cmsPlacements.resolvePlacement({ cmsPage, cmsPosition, section });
+  if (!placement) {
+    throw new Error('Invalid CMS placement. Use cmsPage and cmsPosition (or legacy section).');
+  }
   const now = new Date();
   const query = {
     mediaTab: cleanString(mediaTab) || 'Slider',
-    section: cleanString(section).toUpperCase() || 'HOMEPAGE',
     status: 'Active',
-    $and: [{ uploadDate: { $lte: now } }, { expiryDate: { $gte: now } }],
+    $and: [
+      cmsPlacements.placementQueryOr(placement),
+      { uploadDate: { $lte: now } },
+      { expiryDate: { $gte: now } },
+    ],
   };
   if (cleanString(country)) query.country = cleanString(country);
-  return (await DsaSlider.find(query).sort({ updatedAt: -1 }).lean()) || [];
+  const rows = (await DsaSlider.find(query).sort({ updatedAt: -1 }).lean()) || [];
+  return rows.map(withResolvedPlacement);
 }
 
-async function getSummary({ mediaTab, section, country, dsaCode } = {}) {
-  const query = {};
-  if (cleanString(mediaTab)) query.mediaTab = cleanString(mediaTab);
-  if (cleanString(section)) query.section = cleanString(section).toUpperCase();
-  if (cleanString(country)) query.country = cleanString(country);
-  if (cleanString(dsaCode)) query.dsaCode = cleanString(dsaCode);
-  const records = await DsaSlider.find(query).select('toPay status').lean();
-  const marginUsed = (records || []).filter((r) => r.status === 'Active' || r.status === 'Draft').reduce((sum, r) => sum + Number(r.toPay || 0), 0);
-  const totalMargin = cleanString(dsaCode)
-    ? await dsaPayoutService.getApprovedAvailableBalanceForDsa(cleanString(dsaCode))
-    : 0;
+async function listActiveGiffByCategory({ category } = {}) {
+  const cat = giffPlacement.getGiffCategory(category);
+  if (!cat) {
+    throw new Error('Invalid GIFF category.');
+  }
+  const now = new Date();
+  const query = {
+    mediaTab: 'GIFF',
+    cmsPage: 'giff',
+    cmsPosition: cat.id,
+    status: 'Active',
+    $and: [
+      { uploadDate: { $lte: now } },
+      { expiryDate: { $gte: now } },
+    ],
+  };
+  const rows = (await DsaSlider.find(query).sort({ giffSortOrder: 1, updatedAt: -1 }).lean()) || [];
+  return rows.map(withResolvedPlacement);
+}
+
+async function getSummary({ dsaCode } = {}) {
+  const code = cleanString(dsaCode).toUpperCase();
+  if (!code) {
+    return { totalMargin: 0, marginUsed: 0, availableMargin: 0 };
+  }
+  const records = await DsaSlider.find({ dsaCode: code }).select('toPay status').lean();
+  const marginUsed = (records || [])
+    .filter((r) => r.status === 'Active' || r.status === 'Draft')
+    .reduce((sum, r) => sum + Number(r.toPay || 0), 0);
+  const totalMargin = await dsaPayoutService.getApprovedAvailableBalanceForDsa(code);
   return {
     totalMargin: Number(totalMargin.toFixed(2)),
     marginUsed: Number(marginUsed.toFixed(2)),
@@ -278,6 +397,7 @@ module.exports = {
   updateSlider,
   deleteSlider,
   listActiveBySlot,
+  listActiveGiffByCategory,
   getSummary,
   getSlotStatus,
   occupiesSlot,

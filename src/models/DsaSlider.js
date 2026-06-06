@@ -4,6 +4,9 @@ const dsaSliderSchema = new mongoose.Schema(
   {
     mediaTab: { type: String, required: true, trim: true, default: 'Slider' },
     imageUrl: { type: String, required: true, trim: true },
+    cmsPage: { type: String, trim: true, default: '', index: true },
+    cmsPosition: { type: String, trim: true, default: '', index: true },
+    /** Legacy; synced from cmsPage:cmsPosition or legacy HOMEPAGE-style codes */
     section: { type: String, trim: true, default: 'HOMEPAGE' },
     country: { type: String, trim: true, default: 'India' },
     category: { type: String, trim: true, default: '' },
@@ -14,6 +17,8 @@ const dsaSliderSchema = new mongoose.Schema(
     luxuryFees: { type: Number, default: 0, min: 0 },
     discount: { type: Number, default: 0, min: 0 },
     toPay: { type: Number, default: 0, min: 0 },
+    giffFormat: { type: String, trim: true, lowercase: true, default: '' },
+    giffSortOrder: { type: Number, default: 1, min: 1 },
     status: { type: String, enum: ['Draft', 'Active', 'Inactive', 'Expired'], default: 'Draft' },
     uploadDate: { type: Date, default: Date.now },
     expiryDate: { type: Date, default: null },
@@ -26,6 +31,7 @@ const dsaSliderSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+dsaSliderSchema.index({ mediaTab: 1, cmsPage: 1, cmsPosition: 1, country: 1 });
 dsaSliderSchema.index({ mediaTab: 1, section: 1, country: 1 });
 dsaSliderSchema.index({ mediaTab: 1, section: 1, country: 1, status: 1, uploadDate: 1, expiryDate: 1 });
 dsaSliderSchema.index({ status: 1, uploadDate: 1, expiryDate: 1 });

@@ -15,6 +15,7 @@ const contestQuizSchema = new mongoose.Schema(
     },
     deadlineMessage: { type: String, trim: true, default: '' },
     validUntil: { type: Date, required: true },
+    correctOptionIndex: { type: Number, min: 0, max: 3, default: null },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true },

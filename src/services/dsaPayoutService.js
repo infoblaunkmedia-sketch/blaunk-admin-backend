@@ -1,6 +1,11 @@
 const DsaPayout = require('../models/DsaPayout');
 const dsaLimitService = require('./dsaLimitService');
-const { STATUS, normalizePayoutStatus, isNegativeStatus } = require('../constants/payoutStatus');
+const {
+  STATUS,
+  normalizePayoutStatus,
+  isNegativeStatus,
+  isValidPayoutRemark,
+} = require('../constants/payoutStatus');
 
 function cleanString(v) {
   return String(v == null ? '' : v).trim();
@@ -68,15 +73,49 @@ async function createPayout(payload) {
   return doc.toObject();
 }
 
+async function latestApprovedLimitForDsa(dsaCode, excludeId) {
+  const code = cleanString(dsaCode).toUpperCase();
+  if (!code) return 0;
+  const query = { dsaCode: code, status: STATUS.APPROVED, calculatedLimit: { $gt: 0 } };
+  if (excludeId) query._id = { $ne: excludeId };
+  const latest = await DsaPayout.findOne(query)
+    .sort({ approvedAt: -1, updatedAt: -1 })
+    .select('calculatedLimit')
+    .lean();
+  return Number(latest?.calculatedLimit || 0);
+}
+
+async function resolveApprovedLimitPortion(rec) {
+  const stored = Number(rec.calculatedLimit || 0);
+  if (stored > 0) return stored;
+  const inr = Number(rec.currencyInr || 0);
+  if (inr <= 0) return 0;
+  const sr = Number(rec.shareRatio || 30);
+  return Number((inr * sr / 100).toFixed(2));
+}
+
+/** Spendable cap for this approval = admin Limit (calculatedLimit), not cumulative with prior pay-ins. */
+function resolveAvailableBalance(rec, limitPortion) {
+  const stored = Number(rec.calculatedLimit || 0);
+  if (stored > 0) return stored;
+  return Math.max(0, limitPortion);
+}
+
 async function updatePayoutStatusById(id, statusInput, note, actedBy) {
   const status = normalizePayoutStatus(statusInput);
   if (!status) throw new Error('status is invalid');
+  if (![STATUS.PENDING, STATUS.APPROVED, STATUS.REJECTED].includes(status)) {
+    throw new Error('Only Pending, Approved, or Rejected status is allowed.');
+  }
 
   const rec = await DsaPayout.findById(id).lean();
   if (!rec) return null;
 
   const actor = cleanString(actedBy);
   const noteText = cleanString(note);
+  if (status === STATUS.REJECTED && !isValidPayoutRemark(noteText)) {
+    throw new Error('A valid remark is required when rejecting.');
+  }
   const patch = {
     status,
     lastActedBy: actor,
@@ -84,12 +123,11 @@ async function updatePayoutStatusById(id, statusInput, note, actedBy) {
   };
 
   if (status === STATUS.APPROVED) {
-    const limitBase = Number(rec.calculatedLimit || 0) > 0
-      ? Number(rec.calculatedLimit || 0)
-      : Number(rec.newAmount || 0) + Number(rec.bodBalance || 0);
-    const availableBalance = Number(
-      (limitBase - Number(rec.usedValue || 0)).toFixed(2),
-    );
+    const limitPortion = await resolveApprovedLimitPortion(rec);
+    const availableBalance = resolveAvailableBalance(rec, limitPortion);
+    if (Number(rec.calculatedLimit || 0) <= 0 && limitPortion > 0) {
+      patch.calculatedLimit = limitPortion;
+    }
     Object.assign(patch, {
       approvalNote: noteText,
       rejectionReason: '',
@@ -97,7 +135,7 @@ async function updatePayoutStatusById(id, statusInput, note, actedBy) {
       approvedAt: new Date(),
       rejectedBy: '',
       rejectedAt: null,
-      availableBalance: Math.max(0, availableBalance),
+      availableBalance,
     });
   } else if (isNegativeStatus(status)) {
     Object.assign(patch, {
@@ -158,11 +196,16 @@ async function updatePayoutFieldsById(id, fields = {}) {
 async function getApprovedAvailableBalanceForDsa(dsaCode) {
   const code = cleanString(dsaCode).toUpperCase();
   if (!code) return 0;
-  const rows = await DsaPayout.find({ dsaCode: code, status: STATUS.APPROVED })
-    .select('availableBalance')
+  const latest = await DsaPayout.findOne({ dsaCode: code, status: STATUS.APPROVED })
+    .sort({ approvedAt: -1, updatedAt: -1 })
+    .select('calculatedLimit currencyInr shareRatio availableBalance')
     .lean();
-  const total = (rows || []).reduce((sum, r) => sum + Number(r.availableBalance || 0), 0);
-  return Number(total.toFixed(2));
+  if (!latest) return 0;
+  const limit = Number(latest.calculatedLimit || 0);
+  if (limit > 0) return limit;
+  const portion = await resolveApprovedLimitPortion(latest);
+  if (portion > 0) return portion;
+  return Math.max(0, Number(latest.availableBalance || 0));
 }
 
 module.exports = {

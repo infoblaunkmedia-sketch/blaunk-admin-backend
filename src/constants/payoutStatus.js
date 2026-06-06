@@ -42,13 +42,29 @@ function normalizePayoutStatus(raw) {
   return ALIASES[key] || null;
 }
 
+const PAYOUT_REMARK_OPTIONS = [
+  'Reversed Back',
+  'Duplicate Entry',
+  'Journal Voucher Reversal',
+  'Management Not Approved',
+  'DSA Closed & Transferred',
+  'Bank Entry Missing',
+];
+
 function isNegativeStatus(status) {
-  return status === STATUS.REJECTED || status === STATUS.CANCELLED || status === STATUS.ENTRY_MISSING;
+  return status === STATUS.REJECTED;
+}
+
+function isValidPayoutRemark(value) {
+  const text = String(value || '').trim();
+  return PAYOUT_REMARK_OPTIONS.includes(text);
 }
 
 module.exports = {
   PAYOUT_STATUSES,
+  PAYOUT_REMARK_OPTIONS,
   STATUS,
   normalizePayoutStatus,
   isNegativeStatus,
+  isValidPayoutRemark,
 };

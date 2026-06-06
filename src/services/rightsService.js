@@ -18,6 +18,7 @@ const ALL_SECTIONS = [
   'customers:vendors',
   'reports',
   'corporate',
+  'retailManagement',
   'settings',
 ];
 

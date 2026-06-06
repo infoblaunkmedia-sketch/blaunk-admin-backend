@@ -1,4 +1,7 @@
 const Vacancy = require('../models/Vacancy');
+const VacancyConfig = require('../models/VacancyConfig');
+
+const DEFAULT_APPLY_EMAIL = 'careers@blaunk.com';
 
 function cleanString(v) {
   return String(v == null ? '' : v).trim();
@@ -44,6 +47,29 @@ function toDto(doc) {
   };
 }
 
+async function getVacancyApplyEmail() {
+  const doc = await VacancyConfig.findOneAndUpdate(
+    { key: 'default' },
+    { $setOnInsert: { key: 'default', applyEmail: DEFAULT_APPLY_EMAIL } },
+    { upsert: true, returnDocument: 'after' },
+  ).lean();
+  return cleanString(doc?.applyEmail) || DEFAULT_APPLY_EMAIL;
+}
+
+async function setVacancyApplyEmail(emailInput) {
+  const applyEmail = cleanString(emailInput);
+  if (!applyEmail) throw new Error('Apply email is required.');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(applyEmail)) {
+    throw new Error('Apply email must be a valid email address.');
+  }
+  const doc = await VacancyConfig.findOneAndUpdate(
+    { key: 'default' },
+    { $set: { applyEmail }, $setOnInsert: { key: 'default' } },
+    { upsert: true, returnDocument: 'after' },
+  ).lean();
+  return cleanString(doc?.applyEmail) || DEFAULT_APPLY_EMAIL;
+}
+
 async function listVacancies({ department, status, q, limit = 500, publicOnly = false } = {}) {
   const query = {};
   if (publicOnly) {
@@ -65,7 +91,8 @@ async function listVacancies({ department, status, q, limit = 500, publicOnly = 
   }
   const safeLimit = Math.min(Math.max(parseInt(String(limit), 10) || 500, 1), 2000);
   const rows = await Vacancy.find(query).sort({ createdAt: -1 }).limit(safeLimit).lean();
-  return rows.map(toDto).filter(Boolean);
+  const applyEmail = await getVacancyApplyEmail();
+  return rows.map((doc) => ({ ...toDto(doc), applyEmail })).filter(Boolean);
 }
 
 async function listPublicVacancies() {
@@ -140,6 +167,8 @@ async function deleteVacancyById(id) {
 }
 
 module.exports = {
+  getVacancyApplyEmail,
+  setVacancyApplyEmail,
   listVacancies,
   listPublicVacancies,
   getVacancyById,

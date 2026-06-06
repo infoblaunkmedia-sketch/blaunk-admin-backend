@@ -37,7 +37,30 @@ async function getSummary() {
       { $group: { _id: null, totalRevenue: { $sum: '$amount' }, totalGst: { $sum: '$gstAmount' } } },
     ]),
     DsaPayout.aggregate([
-      { $group: { _id: null, total: { $sum: '$submittedAmount' }, pending: { $sum: { $cond: [{ $in: ['$status', ['PENDING', 'PENDING_APPROVAL', 'PENDING_LEGACY']] }, '$submittedAmount', 0] } } } },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$submittedAmount' },
+          pending: {
+            $sum: {
+              $cond: [
+                { $in: ['$status', ['PENDING', 'PENDING_APPROVAL', 'PENDING_LEGACY']] },
+                '$submittedAmount',
+                0,
+              ],
+            },
+          },
+          pendingCount: {
+            $sum: {
+              $cond: [
+                { $in: ['$status', ['PENDING', 'PENDING_APPROVAL', 'PENDING_LEGACY']] },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
     ]),
     Product.countDocuments({ status: 'pending' }),
     Seller.countDocuments({ approvalStatus: 'pending' }),
@@ -51,7 +74,7 @@ async function getSummary() {
   });
 
   const rev = revenueAgg[0] || { totalRevenue: 0, totalGst: 0 };
-  const pay = payoutAgg[0] || { total: 0, pending: 0 };
+  const pay = payoutAgg[0] || { total: 0, pending: 0, pendingCount: 0 };
   const referralCommission = await Referral.aggregate([
     { $group: { _id: null, total: { $sum: '$commissionAmount' } } },
   ]);
@@ -64,6 +87,7 @@ async function getSummary() {
     totalGst: rev.totalGst,
     dsaPayoutTotal: pay.total,
     dsaPayoutPending: pay.pending,
+    dsaPayoutPendingCount: pay.pendingCount || 0,
     referralCommissionTotal: referralCommission[0]?.total || 0,
     pendingProductApprovals: pendingProducts,
     pendingSellerApprovals: pendingSellers,

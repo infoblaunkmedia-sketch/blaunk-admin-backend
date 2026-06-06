@@ -1,4 +1,5 @@
 const DsaSlider = require('../models/DsaSlider');
+const { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } = require('../utils/dateFormat');
 const ThirdPartyCredential = require('../models/ThirdPartyCredential');
 const Dsa = require('../models/Dsa');
 const EmployeeCredentials = require('../models/EmployeeCredentials');
@@ -15,6 +16,10 @@ const MacAddressConfig = require('../models/MacAddressConfig');
 const Vacancy = require('../models/Vacancy');
 const activityLogService = require('./activityLogService');
 const payslipReportService = require('./payslipReportService');
+const ContestQuiz = require('../models/ContestQuiz');
+const ContestSubmission = require('../models/ContestSubmission');
+const User = require('../models/User');
+const IndividualCustomer = require('../models/IndividualCustomer');
 
 const SALES_UPLOAD_REPORT_TYPES = new Set([
   'MIS-Subscription',
@@ -126,7 +131,7 @@ async function exportSalesMisRows({
     return {
       id: String(s._id),
       name: s.plan || s.mediaTab || '',
-      date: s.uploadDate ? new Date(s.uploadDate).toISOString().slice(0, 10) : '',
+      date: formatDateDDMMYYYY(s.uploadDate),
       status: s.status || '',
       mediaTab: s.mediaTab || '',
       section: s.section || '',
@@ -193,7 +198,7 @@ async function exportVacancyReport({ fromDate, toDate, q }) {
     title: v.jobTitle || '',
     department: v.department || '',
     openings: v.numberOfOpenings ?? 0,
-    postedDate: v.postedDate || '',
+    postedDate: formatDateDDMMYYYY(v.postedDate),
     status: v.status || '',
   }));
 }
@@ -212,13 +217,13 @@ async function exportB2bLedger({ fromDate, toDate, q }) {
     payinAmount: Number(p.submittedAmount || 0).toFixed(2),
     netPayout: Number(p.currencyInr || p.submittedAmount || 0).toFixed(2),
     transferStatus: p.status || '',
-    date: p.submissionDate || (p.createdAt ? new Date(p.createdAt).toISOString().slice(0, 10) : ''),
+    date: formatDateDDMMYYYY(p.submissionDate || p.createdAt),
     dsaCode: p.dsaCode || '',
     dsaName: p.dsaName || '',
     country: p.country || '',
     mode: p.mode || '',
     sharePct: p.shareRatio ?? '',
-    approvalDate: p.approvedAt ? new Date(p.approvedAt).toISOString().slice(0, 10) : '',
+    approvalDate: formatDateDDMMYYYY(p.approvedAt),
   }));
 }
 
@@ -234,7 +239,7 @@ async function exportOutstandingPayments({ q }) {
   return rows.map((p) => ({
     orderId: p.transactionNumber || String(p._id),
     amountDue: Number(p.submittedAmount || 0).toFixed(2),
-    dueDate: p.submissionDate || '',
+    dueDate: formatDateDDMMYYYY(p.submissionDate),
     status: p.status || '',
   }));
 }
@@ -284,7 +289,7 @@ async function exportDsaPaymentHistory({ fromDate, toDate, q }) {
     amount: Number(p.submittedAmount || 0).toFixed(2),
     currency: p.currency || 'INR',
     status: p.status || '',
-    date: p.submissionDate || (p.createdAt ? new Date(p.createdAt).toISOString().slice(0, 10) : ''),
+    date: formatDateDDMMYYYY(p.submissionDate || p.createdAt),
   }));
 }
 
@@ -312,7 +317,7 @@ async function exportDsaLimitUsage({ q }) {
 async function exportAdminActivity({ fromDate, toDate, q }) {
   const rows = await activityLogService.listActivityLogs({ fromDate, toDate, q });
   return rows.map((l) => ({
-    date: l.timestamp ? new Date(l.timestamp).toISOString().slice(0, 10) : '',
+    date: formatDateDDMMYYYY(l.timestamp),
     action: l.action || '',
     performedBy: l.performedBy || '',
     role: l.role || '',
@@ -334,10 +339,10 @@ async function exportIssueReport({ fromDate, toDate, q }) {
     customerName: i.customerName || '',
     issueType: i.issueType || '',
     status: i.status || '',
-    raisedDate: i.raisedDate || (i.createdAt ? new Date(i.createdAt).toISOString().slice(0, 10) : ''),
+    raisedDate: formatDateDDMMYYYY(i.raisedDate || i.createdAt),
     customerId: i.customerId || '',
     email: i.email || '',
-    resolvedDate: i.resolvedAt ? new Date(i.resolvedAt).toISOString().slice(0, 10) : '',
+    resolvedDate: formatDateDDMMYYYY(i.resolvedAt),
   }));
 }
 
@@ -355,7 +360,7 @@ async function exportReviewSummary({ fromDate, toDate, q }) {
     product: r.product || '',
     rating: r.rating ?? '',
     status: r.status || '',
-    date: r.reviewDate || (r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : ''),
+    date: formatDateDDMMYYYY(r.reviewDate || r.createdAt),
     reviewText: r.reviewText || '',
     vendorId: r.vendorId || '',
   }));
@@ -373,7 +378,7 @@ async function exportVerifierActivity({ fromDate, toDate }) {
     sellerMap[String(s._id)] = s.businessName || s.vendorCode || '';
   });
   return rows.map((v) => ({
-    date: v.updatedAt ? new Date(v.updatedAt).toISOString().slice(0, 10) : '',
+    date: formatDateDDMMYYYY(v.updatedAt),
     vendorId: String(v.vendorId || ''),
     companyName: sellerMap[String(v.vendorId)] || '',
     emailStatus: v.emailStatus || '',
@@ -444,7 +449,7 @@ async function exportSecurityLog() {
       type: 'Allowed IP',
       value: r.ipAddress || '',
       addedBy: r.addedBy || '',
-      addedDate: r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : '',
+      addedDate: formatDateDDMMYYYY(r.createdAt),
       status: r.active ? 'Active' : 'Inactive',
     });
   });
@@ -453,7 +458,7 @@ async function exportSecurityLog() {
       type: 'IP Config',
       value: r.ipAddress || r.serviceProvider || '',
       addedBy: '',
-      addedDate: r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : '',
+      addedDate: formatDateDDMMYYYY(r.createdAt),
       status: 'Active',
     });
   });
@@ -462,7 +467,7 @@ async function exportSecurityLog() {
       type: 'MAC Config',
       value: r.macAddress || r.serviceProvider || '',
       addedBy: '',
-      addedDate: r.createdAt ? new Date(r.createdAt).toISOString().slice(0, 10) : '',
+      addedDate: formatDateDDMMYYYY(r.createdAt),
       status: 'Active',
     });
   });
@@ -521,8 +526,112 @@ async function exportThirdPartyRoster({ fromDate, toDate, q }) {
     email: c.email || '',
     status: c.status || '',
     country: c.country || '',
-    updatedAt: c.updatedAt ? new Date(c.updatedAt).toISOString().slice(0, 10) : '',
+    updatedAt: formatDateDDMMYYYY(c.updatedAt),
   }));
+}
+
+const formatMisDate = formatDateDDMMYYYY;
+const formatMisDateTime = formatDateTimeDDMMYYYY;
+
+async function exportContestQuestions({ fromDate, toDate, q }) {
+  const range = createdAtRange(fromDate, toDate);
+  const query = { ...range };
+  const needle = cleanString(q);
+  if (needle) {
+    const re = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    query.question = re;
+  }
+  const rows = await ContestQuiz.find(query).sort({ createdAt: 1 }).lean();
+  return rows.map((doc, index) => {
+    const options = Array.isArray(doc.options) ? doc.options : [];
+    const finalIdx = doc.correctOptionIndex;
+    const finalAnswer =
+      finalIdx != null && finalIdx >= 0 && finalIdx <= 3 ? (options[finalIdx] || '') : '';
+    return {
+      srNo: index + 1,
+      dateOfQue: formatMisDate(doc.createdAt),
+      question: doc.question || '',
+      option1: options[0] || '',
+      option2: options[1] || '',
+      option3: options[2] || '',
+      option4: options[3] || '',
+      finalAnswer,
+    };
+  });
+}
+
+async function exportContestAnswerSubmissions({ fromDate, toDate, q }) {
+  const range = createdAtRange(fromDate, toDate);
+  const submissions = await ContestSubmission.find({ ...range }).sort({ createdAt: 1 }).lean();
+
+  const quizKeys = [...new Set(submissions.map((s) => cleanString(s.quizKey)).filter(Boolean))];
+  const quizzes = quizKeys.length
+    ? await ContestQuiz.find({ key: { $in: quizKeys } }).lean()
+    : [];
+  const quizByKey = Object.fromEntries(quizzes.map((doc) => [doc.key, doc]));
+
+  const userIds = submissions.map((s) => s.userId).filter(Boolean);
+  const emails = [
+    ...new Set(submissions.map((s) => cleanString(s.participantEmail).toLowerCase()).filter(Boolean)),
+  ];
+
+  const [users, customers] = await Promise.all([
+    userIds.length
+      ? User.find({ _id: { $in: userIds } }).select('username employeeCode email').lean()
+      : [],
+    emails.length
+      ? IndividualCustomer.find({ email: { $in: emails } })
+          .select('customerId fullName country email')
+          .lean()
+      : [],
+  ]);
+
+  const userById = Object.fromEntries(users.map((u) => [String(u._id), u]));
+  const customerByEmail = Object.fromEntries(
+    customers.map((c) => [cleanString(c.email).toLowerCase(), c]),
+  );
+
+  const needle = cleanString(q);
+  const re = needle ? new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') : null;
+
+  const mapped = submissions.map((sub, index) => {
+    const quiz = quizByKey[cleanString(sub.quizKey)] || null;
+    const user = sub.userId ? userById[String(sub.userId)] : null;
+    const email = cleanString(sub.participantEmail).toLowerCase();
+    const customer = customerByEmail[email] || null;
+    const empName =
+      cleanString(sub.participantName) ||
+      cleanString(customer?.fullName) ||
+      cleanString(user?.username) ||
+      '';
+    const code =
+      cleanString(user?.employeeCode) ||
+      cleanString(customer?.customerId) ||
+      cleanString(sub.username) ||
+      '';
+
+    return {
+      srNo: index + 1,
+      dateTime: formatMisDateTime(sub.createdAt),
+      question: quiz?.question || '',
+      answer: sub.answerText || '',
+      empName,
+      code,
+      country: cleanString(customer?.country),
+      state: '',
+      city: '',
+    };
+  });
+
+  if (!re) return mapped;
+  return mapped.filter(
+    (row) =>
+      re.test(row.empName) ||
+      re.test(row.code) ||
+      re.test(row.question) ||
+      re.test(row.answer) ||
+      re.test(row.country),
+  );
 }
 
 async function exportDsaAdActivity(opts) {
@@ -547,8 +656,8 @@ async function exportVendorStatusSummary({ fromDate, toDate, q }) {
     approvalStatus: s.approvalStatus || '',
     kycStatus: s.kycStatus || '',
     country: s.country || '',
-    registeredDate: s.createdAt ? new Date(s.createdAt).toISOString().slice(0, 10) : '',
-    lastUpdated: s.updatedAt ? new Date(s.updatedAt).toISOString().slice(0, 10) : '',
+    registeredDate: formatDateDDMMYYYY(s.createdAt),
+    lastUpdated: formatDateDDMMYYYY(s.updatedAt),
   }));
 }
 
@@ -572,6 +681,8 @@ const REPORT_EXPORTERS = {
   'Issue Report': exportIssueReport,
   'Review Summary': exportReviewSummary,
   'Vendor Status Summary': exportVendorStatusSummary,
+  'Contest Questions': exportContestQuestions,
+  'Contest Answer Submissions': exportContestAnswerSubmissions,
   'Verifier Activity': exportVerifierActivity,
   'KYC Status Summary': exportKycStatus,
   'Shareholding Register': exportShareholdingRegister,

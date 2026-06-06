@@ -5,11 +5,10 @@ function cleanString(v) {
   return String(v == null ? '' : v).trim();
 }
 
+const { formatDateDDMMYYYY, formatDateTimeDDMMYYYY } = require('../utils/dateFormat');
+
 function formatDate(d) {
-  if (!d) return '';
-  const dt = d instanceof Date ? d : new Date(d);
-  if (Number.isNaN(dt.getTime())) return '';
-  return dt.toISOString().slice(0, 10);
+  return formatDateDDMMYYYY(d);
 }
 
 function toDto(doc) {

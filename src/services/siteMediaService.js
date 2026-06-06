@@ -27,8 +27,8 @@ const VALID_SECTIONS = new Set([
 
 const SECTION_SLOT_LIMITS = {
   'contact-us': 10,
-  'social-media': 5,
-  'become-a-seller': 6,
+  'social-media': 13,
+  'become-a-seller': 14,
   contest: 2,
   'refer-earn': 2,
   career: 3,
@@ -187,6 +187,24 @@ function pickImageSlots(items, slots) {
     }));
 }
 
+/** Pick image items in a slot range (for expandable admin groups). */
+function pickImageSlotsInRange(items, startSlot, endSlot) {
+  return items
+    .filter(
+      (i) =>
+        i.slot >= startSlot
+        && i.slot <= endSlot
+        && i.kind === 'image'
+        && i.value,
+    )
+    .sort((a, b) => a.slot - b.slot)
+    .map((i) => ({
+      slot: i.slot,
+      value: i.value,
+      ...(i.title ? { title: i.title } : {}),
+    }));
+}
+
 /** Pick URL items for fixed slot groups (social links). */
 function pickUrlSlots(items, slots) {
   return slots
@@ -211,7 +229,7 @@ function buildSectionLayout(bySection) {
     layout['become-a-seller'] = {
       heroImage: pickImageSlots(become, [1])[0]?.value || '',
       heroSlider: pickImageSlots(become, [2, 3, 4]),
-      bottomSlider: pickImageSlots(become, [5, 6]),
+      bottomSlider: pickImageSlotsInRange(become, 5, SECTION_SLOT_LIMITS['become-a-seller']),
     };
   }
 
@@ -227,7 +245,7 @@ function buildSectionLayout(bySection) {
   if (social) {
     layout['social-media'] = {
       links: pickUrlSlots(social, [1, 2, 3]),
-      banners: pickImageSlots(social, [4, 5]),
+      banners: pickImageSlotsInRange(social, 4, SECTION_SLOT_LIMITS['social-media']),
     };
   }
 

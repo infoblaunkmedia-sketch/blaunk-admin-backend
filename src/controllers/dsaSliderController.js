@@ -36,7 +36,7 @@ async function assertAdminPanelDsaAccess(req, res) {
 }
 
 async function listSlidersController(req, res) {
-  const { mediaTab, section, country, status, q, limit } = req.query || {};
+  const { mediaTab, section, country, status, q, limit, cmsPage, cmsPosition } = req.query || {};
   try {
     if (!(await assertAdminPanelDsaAccess(req, res))) return;
     const dsaCode = is3pUser(req.user) ? ownDsaCode(req) : req.query?.dsaCode;
@@ -44,6 +44,8 @@ async function listSlidersController(req, res) {
       mediaTab,
       section,
       country,
+      cmsPage,
+      cmsPosition,
       status,
       q,
       dsaCode,
@@ -139,9 +141,15 @@ async function updateSliderController(req, res) {
 }
 
 async function slotStatusController(req, res) {
-  const { mediaTab, section, country } = req.query || {};
+  const { mediaTab, section, country, cmsPage, cmsPosition } = req.query || {};
   try {
-    const status = await dsaSliderService.getSlotStatus({ mediaTab, section, country });
+    const status = await dsaSliderService.getSlotStatus({
+      mediaTab,
+      section,
+      country,
+      cmsPage,
+      cmsPosition,
+    });
     return res.json({ status });
   } catch (error) {
     // eslint-disable-next-line no-console
@@ -173,9 +181,15 @@ async function deleteSliderController(req, res) {
 }
 
 async function listPublicSlidersBySlotController(req, res) {
-  const { mediaTab, section, country } = req.query || {};
+  const { mediaTab, section, country, cmsPage, cmsPosition } = req.query || {};
   try {
-    const records = await dsaSliderService.listActiveBySlot({ mediaTab, section, country });
+    const records = await dsaSliderService.listActiveBySlot({
+      mediaTab,
+      section,
+      country,
+      cmsPage,
+      cmsPosition,
+    });
     return res.json({ records });
   } catch (error) {
     const msg = String(error?.message || '');
@@ -185,10 +199,17 @@ async function listPublicSlidersBySlotController(req, res) {
 }
 
 async function sliderSummaryController(req, res) {
-  const { mediaTab, section, country } = req.query || {};
+  const { mediaTab, section, country, cmsPage, cmsPosition } = req.query || {};
   const dsaCode = is3pUser(req.user) ? ownDsaCode(req) : req.query?.dsaCode;
   try {
-    const summary = await dsaSliderService.getSummary({ mediaTab, section, country, dsaCode });
+    const summary = await dsaSliderService.getSummary({
+      mediaTab,
+      section,
+      country,
+      cmsPage,
+      cmsPosition,
+      dsaCode,
+    });
     return res.json({ summary });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to fetch slider summary.' });

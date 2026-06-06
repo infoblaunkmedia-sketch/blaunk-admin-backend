@@ -60,6 +60,7 @@ function shouldBypassWhitelist(req) {
   if (path === '/api/testimonials' && method === 'GET') return true;
   if (path === '/api/referrals/track' && method === 'POST') return true;
   if (path.startsWith('/api/dsa-sliders/public')) return true;
+  if (path.startsWith('/api/public/slot-content')) return true;
   if (path.startsWith('/api/shops/public')) return true;
   if (path === '/api/shops/register' && method === 'POST') return true;
   if (path.startsWith('/api/shop-categories/public')) return true;

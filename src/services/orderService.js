@@ -2,10 +2,10 @@ const Order = require('../models/Order');
 const { ORDER_STATUSES, PAYMENT_STATUSES } = require('../models/Order');
 
 function clean(v) { return String(v == null ? '' : v).trim(); }
+const { formatDateDDMMYYYY } = require('../utils/dateFormat');
+
 function formatDate(d) {
-  if (!d) return '';
-  const dt = d instanceof Date ? d : new Date(d);
-  return Number.isNaN(dt.getTime()) ? '' : dt.toISOString().slice(0, 10);
+  return formatDateDDMMYYYY(d);
 }
 
 function toDto(doc) {

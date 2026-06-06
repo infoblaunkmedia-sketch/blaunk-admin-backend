@@ -1,6 +1,7 @@
 const ContestQuiz = require('../models/ContestQuiz');
 const ContestSubmission = require('../models/ContestSubmission');
 const User = require('../models/User');
+const IndividualCustomer = require('../models/IndividualCustomer');
 
 const DEFAULT_KEY = 'win-contest';
 
@@ -72,6 +73,10 @@ async function getAdminQuiz() {
   }
   const validUntil = doc.validUntil ? new Date(doc.validUntil) : null;
   const validUntilDate = validUntil ? validUntil.toISOString().slice(0, 10) : '';
+  const correctOptionIndex =
+    doc.correctOptionIndex != null && doc.correctOptionIndex >= 0 && doc.correctOptionIndex <= 3
+      ? doc.correctOptionIndex
+      : null;
   return {
     exists: true,
     key: doc.key,
@@ -79,6 +84,7 @@ async function getAdminQuiz() {
     options: doc.options,
     validUntil: validUntilDate,
     deadlinePreview: formatDeadlineMessage(validUntil),
+    correctOptionIndex,
   };
 }
 
@@ -87,6 +93,13 @@ async function upsertQuiz(payload) {
   if (!question) throw new Error('Question is required.');
   const options = normalizeOptions(payload?.options);
   const validUntil = parseValidUntilEndOfDay(payload?.validUntil);
+  let correctOptionIndex = null;
+  if (payload?.correctOptionIndex != null && payload?.correctOptionIndex !== '') {
+    const idx = Number(payload.correctOptionIndex);
+    if (Number.isInteger(idx) && idx >= 0 && idx <= 3) {
+      correctOptionIndex = idx;
+    }
+  }
 
   await ContestQuiz.findOneAndUpdate(
     { key: DEFAULT_KEY },
@@ -96,6 +109,7 @@ async function upsertQuiz(payload) {
         question,
         options,
         validUntil,
+        correctOptionIndex,
         isActive: true,
       },
     },
@@ -208,4 +222,6 @@ module.exports = {
   listSubmissions,
   submitAnswer,
   formatDeadlineMessage,
+  getQuizDoc,
+  DEFAULT_KEY,
 };

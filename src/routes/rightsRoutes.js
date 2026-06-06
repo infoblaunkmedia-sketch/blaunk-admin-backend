@@ -14,7 +14,7 @@ router.post(
   '/',
   authMiddleware,
   requireAdmin,
-  requireSection('settings', 'rights'),
+  requireSection('platform', 'rights'),
   saveRightsController,
 );
 router.get('/me', authMiddleware, getMyRightsController);

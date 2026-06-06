@@ -90,6 +90,8 @@ async function upsertThirdPartyCredential(payload) {
     bankName: cleanStr(body.bankName),
     ifscCode: cleanStr(body.ifscCode),
     bankAccountNumber: cleanStr(body.bankAccountNumber),
+    bankCity: cleanStr(body.bankCity),
+    bankCountry: cleanStr(body.bankCountry),
     swiftNo: cleanStr(body.swiftNo),
     ibanNo: cleanStr(body.ibanNo),
     doj: cleanStr(body.doj),

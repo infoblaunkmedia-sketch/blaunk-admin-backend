@@ -12,8 +12,9 @@ const {
 const router = express.Router();
 
 const matchSectionPairs = [
-  ['settings', 'match-code'],
+  ['platform', 'match-code'],
   ['marketing', 'match-doe'],
+  ['marketing', 'match-code'],
 ];
 
 const matchAdminGuard = [

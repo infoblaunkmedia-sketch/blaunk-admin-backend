@@ -39,6 +39,8 @@ const thirdPartyCredentialSchema = new mongoose.Schema(
     bankName: { type: String, trim: true, default: '' },
     ifscCode: { type: String, trim: true, default: '' },
     bankAccountNumber: { type: String, trim: true, default: '' },
+    bankCity: { type: String, trim: true, default: '' },
+    bankCountry: { type: String, trim: true, default: '' },
     swiftNo: { type: String, trim: true, default: '' },
     ibanNo: { type: String, trim: true, default: '' },
     doj: { type: String, trim: true, default: '' },

@@ -26,6 +26,7 @@ const {
   isBoutiqueHeaderCardPosition,
   isBoutiqueImageSlidePosition,
 } = require('../constants/boutiqueBannerPositions');
+const dsaSliderService = require('./dsaSliderService');
 
 function clean(v) {
   return String(v == null ? '' : v).trim();
@@ -677,6 +678,37 @@ async function listBanners({ page: pageFilter, position } = {}) {
   return { records };
 }
 
+/** Map public banner API page → DSA cmsPage (DSA stores bgt / bgt-view-more, not bgt-common). */
+function resolveDsaCmsPage(apiPage, position) {
+  const p = clean(apiPage).toLowerCase();
+  const pos = clean(position).toLowerCase();
+  if (p === 'home') return 'home';
+  if (p === 'boutique') return 'boutique';
+  if (p === 'bgt-common' || p === 'bgt-trading') {
+    if (pos.startsWith('view-more-')) return 'bgt-view-more';
+    return 'bgt';
+  }
+  return null;
+}
+
+/** Active DSA slider → same public shape as CMS banners for the consumer site. */
+function dsaSliderToPublicBanner(slider, apiPage, position, sortOrder) {
+  return toPublicDto({
+    _id: slider._id,
+    page: clean(apiPage).toLowerCase(),
+    position: clean(position).toLowerCase(),
+    title: '',
+    imageUrl: slider.imageUrl || '',
+    linkUrl: '',
+    tag: '',
+    subtitle: '',
+    ctaText: '',
+    isActive: true,
+    sortOrder,
+    focalPoint: { x: 50, y: 50 },
+  });
+}
+
 async function listPublicBanners({ page, position } = {}) {
   let p = clean(page).toLowerCase() || 'home';
   if (p === 'bgt-trading') p = 'bgt-common';
@@ -685,7 +717,25 @@ async function listPublicBanners({ page, position } = {}) {
   if (pos) query.position = pos;
   const sort = pos ? { sortOrder: 1 } : { position: 1, sortOrder: 1 };
   const rows = await Banner.find(query).sort(sort).lean();
-  const records = rows.filter(isActiveNow).map(toPublicDto);
+  let records = rows.filter(isActiveNow).map(toPublicDto);
+
+  const cmsPage = resolveDsaCmsPage(p, pos);
+  if (cmsPage && pos) {
+    try {
+      const dsaRows = await dsaSliderService.listActiveBySlot({
+        cmsPage,
+        cmsPosition: pos,
+      });
+      const baseOrder = records.reduce((max, r) => Math.max(max, Number(r.sortOrder) || 0), 0);
+      const dsaRecords = dsaRows.map((slider, idx) =>
+        dsaSliderToPublicBanner(slider, p, pos, baseOrder + idx + 1),
+      );
+      records = [...records, ...dsaRecords];
+    } catch {
+      // Unknown placement — CMS records only
+    }
+  }
+
   return { records };
 }
 

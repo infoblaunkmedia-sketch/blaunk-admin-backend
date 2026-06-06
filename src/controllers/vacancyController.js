@@ -40,6 +40,25 @@ async function saveVacancyController(req, res) {
   }
 }
 
+async function getVacancyApplyEmailController(req, res) {
+  try {
+    const applyEmail = await vacancyService.getVacancyApplyEmail();
+    return res.json({ applyEmail });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to load apply email.' });
+  }
+}
+
+async function setVacancyApplyEmailController(req, res) {
+  try {
+    const applyEmail = await vacancyService.setVacancyApplyEmail(req.body?.applyEmail);
+    return res.json({ applyEmail });
+  } catch (error) {
+    const status = String(error?.message || '').toLowerCase().includes('email') ? 400 : 500;
+    return res.status(status).json({ message: error.message || 'Failed to save apply email.' });
+  }
+}
+
 async function deleteVacancyController(req, res) {
   try {
     const deleted = await vacancyService.deleteVacancyById(req.params.id);
@@ -55,6 +74,8 @@ async function deleteVacancyController(req, res) {
 module.exports = {
   listVacanciesController,
   listPublicVacanciesController,
+  getVacancyApplyEmailController,
+  setVacancyApplyEmailController,
   getVacancyController,
   saveVacancyController,
   deleteVacancyController,

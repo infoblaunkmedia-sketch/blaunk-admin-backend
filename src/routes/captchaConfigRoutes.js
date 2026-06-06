@@ -12,7 +12,7 @@ const router = express.Router();
 const settingsGuard = [
   authMiddleware,
   requireAdmin,
-  requireSection('settings', 'security'),
+  requireSection('platform', 'security'),
 ];
 
 router.get('/', settingsGuard, getCaptchaConfigController);

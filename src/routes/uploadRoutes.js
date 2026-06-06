@@ -4,7 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const { authMiddleware } = require('../middleware/authMiddleware');
 const { requireRole, ROLES, requireAdmin } = require('../middleware/requireRole');
-const { requireSection } = require('../middleware/requirePermission');
+const { requireSection, requireAnySectionOr3p } = require('../middleware/requirePermission');
 const {
   require3pMatchCodeForUpload,
   withUpload3pMeta,
@@ -81,8 +81,16 @@ const cmsBannerUploadGuard = [
 
 const cmsGiffUploadGuard = [
   authMiddleware,
-  requireRole(ROLES.ADMIN, ROLES.EMP),
-  requireSection('cms', 'giff'),
+  requireRole(ROLES.ADMIN, ROLES.EMP, ROLES.THREE_P),
+  requireAnySectionOr3p(
+    [
+      ['cms', 'giff'],
+      ['channelPartners', 'dsa'],
+      ['marketing', 'media-ads'],
+    ],
+    ['sales'],
+  ),
+  require3pMatchCodeForUpload,
 ];
 
 const cmsShopUploadGuard = [
@@ -214,12 +222,14 @@ router.post(
           folder,
           publicId: `slot-${Date.now()}`,
         });
-        return res.json({
-          message: 'GIFF image uploaded',
-          url: result.secure_url,
-          publicId: result.public_id,
-          originalName: req.file.originalname,
-        });
+        return res.json(
+          withUpload3pMeta(req, {
+            message: 'GIFF image uploaded',
+            url: result.secure_url,
+            publicId: result.public_id,
+            originalName: req.file.originalname,
+          }),
+        );
       } catch (error) {
         const msg = String(error?.message || 'Cloudinary upload failed.');
         return res.status(500).json({ message: msg });
@@ -231,12 +241,14 @@ router.post(
     const filePath = path.join(uploadsDir, filename);
     try {
       fs.writeFileSync(filePath, req.file.buffer);
-      return res.json({
-        message: 'GIFF image uploaded',
-        filename,
-        originalName: req.file.originalname,
-        url: `/uploads/${filename}`,
-      });
+      return res.json(
+        withUpload3pMeta(req, {
+          message: 'GIFF image uploaded',
+          filename,
+          originalName: req.file.originalname,
+          url: `/uploads/${filename}`,
+        }),
+      );
     } catch (error) {
       const msg = String(error?.message || 'Upload failed.');
       return res.status(500).json({ message: msg });

@@ -1,4 +1,6 @@
 const Giff = require('../models/Giff');
+const dsaSliderService = require('./dsaSliderService');
+const giffPlacement = require('./giffPlacementService');
 const {
   GIFF_CATEGORIES,
   GIFF_FORMATS,
@@ -111,8 +113,44 @@ async function listPublicGiffs({ category } = {}) {
   if (cat) query.category = assertGiffCategory(cat);
 
   const rows = await Giff.find(query).sort({ category: 1, sortOrder: 1 }).lean();
-  const records = rows.filter(isActiveNow).map(toPublicDto);
+  let records = rows.filter(isActiveNow).map(toPublicDto);
+
+  const { GIFF_CATEGORIES } = require('../constants/giffCategories');
+  const categoryIds = cat ? [cat] : GIFF_CATEGORIES.map((c) => c.id);
+
+  try {
+    const dsaGroups = await Promise.all(
+      categoryIds.map((categoryId) =>
+        dsaSliderService.listActiveGiffByCategory({ category: categoryId }).catch(() => []),
+      ),
+    );
+    for (const dsaRows of dsaGroups) {
+      records = [...records, ...dsaRows.map(dsaSliderToPublicDto)];
+    }
+  } catch {
+    // keep CMS-only records
+  }
+
+  records.sort((a, b) => {
+    const catCmp = String(a.category).localeCompare(String(b.category));
+    if (catCmp !== 0) return catCmp;
+    return (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0);
+  });
+
   return { records };
+}
+
+function dsaSliderToPublicDto(slider) {
+  const category = clean(slider.cmsPosition).toLowerCase();
+  return {
+    id: `dsa-${String(slider._id)}`,
+    category,
+    sortOrder: Number(slider.giffSortOrder) || 1,
+    imageUrl: slider.imageUrl || '',
+    format: giffPlacement.normalizeGiffFormat(slider.giffFormat),
+    isActive: true,
+    productId: clean(slider.productId) || undefined,
+  };
 }
 
 async function createGiff(body) {
@@ -128,7 +166,7 @@ async function createGiff(body) {
 
   const max = maxRecordsForCategory(category);
   if (max != null) {
-    const count = await Giff.countDocuments({ category });
+    const count = await giffPlacement.countOccupiedGiffCategory(category);
     if (count >= max) {
       throw new Error(`Maximum ${max} upload(s) allowed for this category.`);
     }

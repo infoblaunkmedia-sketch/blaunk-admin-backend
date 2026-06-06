@@ -35,7 +35,10 @@ async function saveShareholdingController(req, res) {
     bankName,
     ifscCode,
     bankAccountNumber,
+    bankCity,
+    bankCountry,
     pledge,
+    shareStatus,
     nominees = [],
   } = req.body || {};
 
@@ -77,7 +80,10 @@ async function saveShareholdingController(req, res) {
       bankName,
       ifscCode,
       bankAccountNumber,
+      bankCity,
+      bankCountry,
       pledge,
+      shareStatus,
       nominees,
     });
 
@@ -223,7 +229,10 @@ async function exportShareholdingMISController(req, res) {
       'Bank Name': sh.bankName || '',
       'IFSC Code': sh.ifscCode || '',
       'Bank Account No.': sh.bankAccountNumber || '',
+      'Bank City': sh.bankCity || '',
+      'Bank Country': sh.bankCountry || '',
       Pledge: sh.pledge || '',
+      Status: sh.shareStatus || '',
       'Nominee 1 Name': sh.nominees?.[0]?.name || '',
       'Nominee 1 Mobile': sh.nominees?.[0]?.mobile || '',
       'Nominee 1 Relation': sh.nominees?.[0]?.relation || '',

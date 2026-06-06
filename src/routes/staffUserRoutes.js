@@ -13,7 +13,7 @@ const router = express.Router();
 const adminUserGuard = [
   authMiddleware,
   requireAdmin,
-  requireSection('settings', 'rights'),
+  requireSection('platform', 'rights'),
 ];
 
 router.get('/:code', adminUserGuard, getUserByCodeController);

@@ -69,7 +69,10 @@ function historyFieldsFromPayload(payload) {
     bankName: payload.bankName,
     ifscCode: payload.ifscCode,
     bankAccountNumber: payload.bankAccountNumber,
+    bankCity: payload.bankCity,
+    bankCountry: payload.bankCountry,
     pledge: payload.pledge,
+    shareStatus: payload.shareStatus,
     nominees: Array.isArray(payload.nominees) ? payload.nominees : [],
   };
 }
@@ -111,7 +114,10 @@ function mergeShareholderAndHistory(sh, hist) {
     bankName: h.bankName,
     ifscCode: h.ifscCode,
     bankAccountNumber: h.bankAccountNumber,
+    bankCity: h.bankCity,
+    bankCountry: h.bankCountry,
     pledge: h.pledge,
+    shareStatus: h.shareStatus,
     nominees: h.nominees,
     createdAt: h.createdAt,
     updatedAt: h.updatedAt,
@@ -197,7 +203,10 @@ async function migrateLegacyShareholdingsIfNeeded() {
       bankName: doc.bankName,
       ifscCode: doc.ifscCode,
       bankAccountNumber: doc.bankAccountNumber,
+      bankCity: doc.bankCity,
+      bankCountry: doc.bankCountry,
       pledge: doc.pledge,
+      shareStatus: doc.shareStatus,
       nominees: doc.nominees || [],
     };
 
