@@ -12,6 +12,7 @@ const ALL_SECTIONS = [
   'platform',
   'platform:products',
   'platform:categories',
+  'platform:countries',
   'marketing',
   'customers',
   'customers:orders',

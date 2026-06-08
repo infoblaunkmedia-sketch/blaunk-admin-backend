@@ -52,6 +52,8 @@ const thirdPartyCredentialSchema = new mongoose.Schema(
     businessDeposit: { type: String, trim: true, default: '' },
     sharingThreeP: { type: String, trim: true, default: '' },
     sharingBlaunk: { type: String, trim: true, default: '' },
+    commissionSubscriber: { type: String, trim: true, default: '' },
+    commissionRenewal: { type: String, trim: true, default: '' },
 
     // References + document images (URLs to /uploads)
     references: { type: [referenceSchema], default: [] },

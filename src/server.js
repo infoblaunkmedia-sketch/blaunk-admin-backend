@@ -99,6 +99,8 @@ const issueRoutes = require('./routes/issueRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const payrollRoutes = require('./routes/payrollRoutes');
 const vacancyRoutes = require('./routes/vacancyRoutes');
+const countryRoutes = require('./routes/countryRoutes');
+const countryService = require('./services/countryService');
 const bannerService = require('./services/bannerService');
 const giffService = require('./services/giffService');
 const DsaSlider = require('./models/DsaSlider');
@@ -213,6 +215,7 @@ app.use('/api/issues', issueRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/vacancies', vacancyRoutes);
+app.use('/api/countries', countryRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
@@ -280,6 +283,7 @@ async function start() {
       ].map((name) => DsaSlider.collection.dropIndex(name).catch(() => undefined)),
     );
     await authService.ensureAdminUser();
+    await countryService.ensureDefaultCountries();
     const seed = await individualCustomerService.ensureSeedIndividualsIfEmpty();
     if (seed.seeded > 0) {
       // eslint-disable-next-line no-console

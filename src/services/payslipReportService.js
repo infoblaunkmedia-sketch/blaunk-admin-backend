@@ -42,7 +42,8 @@ function numberToWords(n) {
 }
 
 function payslipAnnualMultiplier(reportType) {
-  if (reportType === 'yearly-payslip' || reportType === 'employee-ctc') return 12;
+  // Yearly / CTC PDFs show per-period columns; use monthly figures from employee record.
+  if (reportType === 'yearly-payslip' || reportType === 'employee-ctc') return 1;
   return 1;
 }
 
@@ -93,23 +94,41 @@ function buildDetailedPayslip(emp, filters) {
   const grossEarnings = Math.round(earnings.reduce((s, e) => s + e.earned, 0) * 100) / 100;
   const totalDeductionColumn = deductions.reduce((s, d) => s + d.deduction, 0);
   const totalActualColumn = deductions.reduce((s, d) => s + d.actual, 0);
-  const nettSalaryRelease = Math.round((grossEarnings - totalDeductionColumn - totalActualColumn) * 100) / 100;
+  const nettSalaryRelease = Math.round(grossEarnings - totalDeductionColumn - totalActualColumn);
 
   return {
     employeeCode: emp.empCode || '-',
     employeeName: emp.employeeName || '-',
     department: emp.department || '-',
     financialYear: filters.financialYear || '-',
-    reportType: filters.reportType || '-',
-    period: filters.period || '-',
+    reportType: filters.reportType || 'monthly-payslip',
+    period: filters.period || 'Monthly',
     month: filters.month || '-',
+    profile: {
+      panNo: emp.pan || '',
+      grade: emp.jobGrade || '',
+      uanNo: emp.uan || '',
+      aadharNo: emp.aadhaar || '',
+      location: emp.city || emp.centreName || '',
+      designation: emp.designation || '',
+      pfAccountNo: emp.pf || '',
+      esiNo: emp.esi || '',
+      dateOfJoining: emp.doj || '',
+      bankAccountNo: emp.bankAccountNumber || '',
+      bankName: emp.bankName || '',
+      leaveTaken: emp.monthlyLeaves || '',
+      leaveBalance: '',
+      lwp: '',
+      odPay: '',
+    },
     earnings,
     deductions,
     grossEarnings,
     totalDeductionColumn: Math.round(totalDeductionColumn * 100) / 100,
     totalActualColumn: Math.round(totalActualColumn * 100) / 100,
     nettSalaryRelease,
-    amountInWords: numberToWords(nettSalaryRelease),
+    amountInWords: numberToWords(Math.round(nettSalaryRelease)),
+    generatedOn: new Date().toISOString(),
   };
 }
 

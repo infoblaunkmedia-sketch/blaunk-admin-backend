@@ -6,6 +6,7 @@ const {
   listPayrollEmployeesController,
   listPayrollDepartmentsController,
   generatePayslipReportController,
+  generateMyPayslipController,
 } = require('../controllers/payslipReportController');
 
 const router = express.Router();
@@ -20,5 +21,11 @@ router.get('/employees', payrollGuard, listPayrollEmployeesController);
 router.get('/departments', payrollGuard, listPayrollDepartmentsController);
 
 router.post('/', payrollGuard, generatePayslipReportController);
+
+const selfPayslipGuard = [
+  authMiddleware,
+  requireRole(ROLES.ADMIN, ROLES.EMP),
+];
+router.post('/my', selfPayslipGuard, generateMyPayslipController);
 
 module.exports = router;

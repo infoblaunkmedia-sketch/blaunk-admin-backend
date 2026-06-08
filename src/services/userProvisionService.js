@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const User = require('../models/User');
 const EmployeeCredentials = require('../models/EmployeeCredentials');
+const ThirdPartyCredential = require('../models/ThirdPartyCredential');
 
 function generateTempPassword() {
   // 10 chars, URL-safe-ish, easy to read/copy
@@ -53,8 +54,35 @@ async function ensureUserForEmployeeCode(employeeCode, employeeType) {
   return { user, tempPassword: null };
 }
 
+function userStatusFrom3pCredentialStatus(credentialStatus) {
+  return String(credentialStatus || '').trim() === 'Active' ? 'Active' : 'Disabled';
+}
+
+async function syncUserStatusFor3pc(threePEmplCode, credentialStatus) {
+  const code = String(threePEmplCode || '').trim().toUpperCase();
+  if (!code) return null;
+  const status = userStatusFrom3pCredentialStatus(credentialStatus);
+  return User.findOneAndUpdate(
+    { username: code, employeeType: '3pc' },
+    { $set: { status } },
+    { returnDocument: 'after' },
+  ).lean();
+}
+
+async function resolve3pCredentialActive(partnerCode) {
+  const code = String(partnerCode || '').trim().toUpperCase();
+  if (!code) return false;
+  const credential = await ThirdPartyCredential.findOne({ threePEmplCode: code })
+    .select('status')
+    .lean();
+  return String(credential?.status || '').trim() === 'Active';
+}
+
 module.exports = {
   ensureUserForEmployeeCode,
   generateTempPassword,
+  syncUserStatusFor3pc,
+  resolve3pCredentialActive,
+  userStatusFrom3pCredentialStatus,
 };
 

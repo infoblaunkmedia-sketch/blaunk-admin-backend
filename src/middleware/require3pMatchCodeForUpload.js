@@ -28,7 +28,7 @@ async function require3pMatchCodeForUpload(req, res, next) {
       return res.status(403).json({ message: FORBIDDEN_MSG });
     }
 
-    const valid = await matchCodeService.validateCode(matchCode);
+    const valid = await matchCodeService.validateCode(matchCode, empCode);
     if (!valid) {
       return res.status(403).json({ message: FORBIDDEN_MSG });
     }

@@ -94,10 +94,31 @@ async function resolveApprovedLimitPortion(rec) {
   return Number((inr * sr / 100).toFixed(2));
 }
 
-/** Spendable cap for this approval = admin Limit (calculatedLimit), not cumulative with prior pay-ins. */
-function resolveAvailableBalance(rec, limitPortion) {
+/** Share portion from stored fields (calculatedLimit is share only, not total). */
+function resolveSharePortion(rec) {
   const stored = Number(rec.calculatedLimit || 0);
   if (stored > 0) return stored;
+  const inr = Number(rec.currencyInr || 0);
+  if (inr <= 0) return 0;
+  const sr = Number(rec.shareRatio || 30);
+  return Number((inr * sr / 100).toFixed(2));
+}
+
+/** Total approved limit = Currency-INR + share portion. */
+function resolveTotalApprovedLimit(rec) {
+  const inr = Number(rec.currencyInr || 0);
+  const share = resolveSharePortion(rec);
+  const total = inr + share;
+  if (total > 0) return Number(total.toFixed(2));
+  return Math.max(0, Number(rec.availableBalance || 0));
+}
+
+/** Spendable cap = total limit (INR + share), not share alone. */
+function resolveAvailableBalance(rec, limitPortion) {
+  const inr = Number(rec.currencyInr || 0);
+  const share = limitPortion > 0 ? limitPortion : resolveSharePortion(rec);
+  const total = inr + share;
+  if (total > 0) return Number(total.toFixed(2));
   return Math.max(0, limitPortion);
 }
 
@@ -201,11 +222,7 @@ async function getApprovedAvailableBalanceForDsa(dsaCode) {
     .select('calculatedLimit currencyInr shareRatio availableBalance')
     .lean();
   if (!latest) return 0;
-  const limit = Number(latest.calculatedLimit || 0);
-  if (limit > 0) return limit;
-  const portion = await resolveApprovedLimitPortion(latest);
-  if (portion > 0) return portion;
-  return Math.max(0, Number(latest.availableBalance || 0));
+  return resolveTotalApprovedLimit(latest);
 }
 
 module.exports = {
@@ -217,4 +234,5 @@ module.exports = {
   approvePayoutById,
   rejectPayoutById,
   getApprovedAvailableBalanceForDsa,
+  resolveTotalApprovedLimit,
 };

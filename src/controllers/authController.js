@@ -1,5 +1,6 @@
 const authService = require('../services/authService');
 const EmployeeCredentials = require('../models/EmployeeCredentials');
+const ThirdPartyCredential = require('../models/ThirdPartyCredential');
 const User = require('../models/User');
 const Admin = require('../models/Admin');
 const ipWhitelistService = require('../services/ipWhitelistService');
@@ -64,9 +65,21 @@ async function loginController(req, res) {
       return res.status(403).json({ message: 'Account disabled. Please contact your administrator.' });
     }
 
+    const is3pc = String(user.employeeType || '').toLowerCase() === '3pc';
+    if (is3pc) {
+      const partnerCode = String(user.employeeCode || user.username || '').trim().toUpperCase();
+      const credential = partnerCode
+        ? await ThirdPartyCredential.findOne({ threePEmplCode: partnerCode }).select('status').lean()
+        : null;
+      if (!credential || String(credential.status || '').trim() !== 'Active') {
+        return res.status(403).json({
+          message: 'Partner account is not active. Please contact your administrator.',
+        });
+      }
+    }
+
     // IP whitelist: enforce ONLY for internal employees (not admin, not 3PC).
     // Note: this controller is used for both `/api/auth/login` and `/api/auth/admin/login`.
-    const is3pc = String(user.employeeType || '').toLowerCase() === '3pc';
     if (!isAdmin && !isAdminRoute && !is3pc) {
       const clientIp = getClientIp(req);
       const permitted = await ipWhitelistService.isRequestAllowed(clientIp);

@@ -33,6 +33,7 @@ async function saveThirdPartyCredentialController(req, res) {
     // If a 3PC employee code is present, ensure they can log in with default captcha password.
     if (record?.threePEmplCode) {
       await userProvisionService.ensureUserForEmployeeCode(record.threePEmplCode, '3pc');
+      await userProvisionService.syncUserStatusFor3pc(record.threePEmplCode, record.status);
     }
     return res.status(200).json({ record });
   } catch (error) {

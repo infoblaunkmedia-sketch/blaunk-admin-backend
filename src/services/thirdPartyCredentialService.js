@@ -62,7 +62,8 @@ async function upsertThirdPartyCredential(payload) {
     generatedOrResolved3pCode = await employeeService.getNextEmployeeCode('3pc');
   }
 
-  const matchCode = await matchCodeService.resolveActiveMatchCodeFor3p();
+  const activeMatch = await matchCodeService.getActiveForEmployee(generatedOrResolved3pCode);
+  const matchCode = activeMatch?.code || '';
 
   const set = {
     department: cleanStr(body.department),
@@ -103,6 +104,8 @@ async function upsertThirdPartyCredential(payload) {
     businessDeposit: cleanStr(body.businessDeposit),
     sharingThreeP: cleanStr(body.sharingThreeP),
     sharingBlaunk: cleanStr(body.sharingBlaunk),
+    commissionSubscriber: cleanStr(body.commissionSubscriber),
+    commissionRenewal: cleanStr(body.commissionRenewal),
     references: cleanRefs(body.references),
     employeePhotoUrl: cleanStr(body.employeePhotoUrl),
     chqImageUrl: cleanStr(body.chqImageUrl),

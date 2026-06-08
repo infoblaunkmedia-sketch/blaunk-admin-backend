@@ -7,6 +7,7 @@ const {
   activeCodeController,
   generateController,
   validateController,
+  patchStatusController,
 } = require('../controllers/matchCodeController');
 
 const router = express.Router();
@@ -37,5 +38,6 @@ router.get('/history', matchAdminGuard, listHistoryController);
 router.get('/active', matchReadGuard, activeCodeController);
 router.get('/validate', matchReadGuard, validateController);
 router.post('/generate', matchAdminGuard, generateController);
+router.patch('/:id/status', matchAdminGuard, patchStatusController);
 
 module.exports = router;
