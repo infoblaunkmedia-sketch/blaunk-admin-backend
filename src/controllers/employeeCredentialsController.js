@@ -22,6 +22,7 @@ async function saveEmployeeCredentialsController(req, res) {
     aadhaar,
     empCode,
     address,
+    address2,
     city,
     zip,
     country,
@@ -87,8 +88,18 @@ async function saveEmployeeCredentialsController(req, res) {
   }
 
   try {
-    const normalizedEmpCode = String(empCode || '').trim().toUpperCase()
-      || await employeeService.getNextEmployeeCode('employee');
+    const normalizedPan = String(pan || '').trim().toUpperCase();
+    const normalizedEmpCode = String(empCode || '').trim().toUpperCase();
+    if (!normalizedEmpCode) {
+      return res.status(400).json({ message: 'Employee code is required.' });
+    }
+    const EmployeeCredentials = require('../models/EmployeeCredentials');
+    const existingByCode = await EmployeeCredentials.findOne({ empCode: normalizedEmpCode }).lean();
+    if (existingByCode && String(existingByCode.pan || '').toUpperCase() !== normalizedPan) {
+      return res.status(409).json({
+        message: `Employee code "${normalizedEmpCode}" is already assigned to another employee. Please enter a different code.`,
+      });
+    }
     const record = await employeeCredentialsService.upsertEmployeeCredentials({
       pan,
       employeeName,
@@ -97,6 +108,7 @@ async function saveEmployeeCredentialsController(req, res) {
       aadhaar,
       empCode: normalizedEmpCode,
       address,
+    address2,
       city,
       zip,
       country,

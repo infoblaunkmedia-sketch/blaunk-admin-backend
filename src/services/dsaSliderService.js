@@ -376,17 +376,31 @@ async function listActiveGiffByCategory({ category } = {}) {
 async function getSummary({ dsaCode } = {}) {
   const code = cleanString(dsaCode).toUpperCase();
   if (!code) {
-    return { totalMargin: 0, marginUsed: 0, availableMargin: 0 };
+    return {
+      totalMargin: 0,
+      marginUsed: 0,
+      availableMargin: 0,
+      companyName: '',
+      dsaName: '',
+      country: '',
+      shareRatio: 30,
+    };
   }
   const records = await DsaSlider.find({ dsaCode: code }).select('toPay status').lean();
   const marginUsed = (records || [])
     .filter((r) => r.status === 'Active' || r.status === 'Draft')
     .reduce((sum, r) => sum + Number(r.toPay || 0), 0);
   const totalMargin = await dsaPayoutService.getApprovedAvailableBalanceForDsa(code);
+  const profile = await dsaService.getDsaProfileByCode(code);
+  const companyName = String(profile.companyName || '').trim();
   return {
     totalMargin: Number(totalMargin.toFixed(2)),
     marginUsed: Number(marginUsed.toFixed(2)),
     availableMargin: Number((totalMargin - marginUsed).toFixed(2)),
+    companyName,
+    dsaName: companyName,
+    country: profile.country || '',
+    shareRatio: profile.shareRatio || 30,
   };
 }
 

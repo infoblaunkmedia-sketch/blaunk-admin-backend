@@ -41,11 +41,14 @@ async function getRights(employeeCode, type) {
 }
 
 async function getRightsForUser(user) {
-  if (!user || !user.employeeCode) {
-    return ALL_SECTIONS;
-  }
-  const { sections } = await getRights(user.employeeCode, user.employeeType || 'employee');
-  return sections.length ? sections : [];
+  if (!user) return [];
+  const role = String(user.role || '').toLowerCase();
+  if (role === 'admin') return ALL_SECTIONS;
+  const code = String(user.employeeCode || user.username || '').trim();
+  if (!code) return [];
+  const type = user.employeeType === '3pc' ? '3pc' : 'employee';
+  const { sections } = await getRights(code, type);
+  return Array.isArray(sections) ? sections : [];
 }
 
 module.exports = {

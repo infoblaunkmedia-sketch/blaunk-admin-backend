@@ -19,6 +19,7 @@ const employeeCredentialsSchema = new mongoose.Schema(
     aadhaar: String,
     empCode: String,
     address: String,
+    address2: String,
     city: String,
     zip: String,
     country: String,

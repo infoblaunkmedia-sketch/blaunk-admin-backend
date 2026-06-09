@@ -1,5 +1,4 @@
 const ThirdPartyCredential = require('../models/ThirdPartyCredential');
-const employeeService = require('./employeeService');
 const dsaService = require('./dsaService');
 const matchCodeService = require('./matchCodeService');
 
@@ -56,10 +55,20 @@ async function upsertThirdPartyCredential(payload) {
     if (existing?.threePEmplCode) {
       generatedOrResolved3pCode = String(existing.threePEmplCode).trim().toUpperCase();
     } else if (!generatedOrResolved3pCode) {
-      generatedOrResolved3pCode = await employeeService.getNextEmployeeCode('3pc');
+      throw new Error('3P employee code is required.');
     }
   } else {
-    generatedOrResolved3pCode = await employeeService.getNextEmployeeCode('3pc');
+    if (!generatedOrResolved3pCode) {
+      throw new Error('3P employee code is required.');
+    }
+    const duplicate = await ThirdPartyCredential.findOne({ threePEmplCode: generatedOrResolved3pCode }).lean();
+    if (duplicate) {
+      const err = new Error(
+        `3P employee code "${generatedOrResolved3pCode}" is already assigned to another credential. Please enter a different code.`,
+      );
+      err.statusCode = 409;
+      throw err;
+    }
   }
 
   const activeMatch = await matchCodeService.getActiveForEmployee(generatedOrResolved3pCode);
@@ -108,6 +117,7 @@ async function upsertThirdPartyCredential(payload) {
     commissionRenewal: cleanStr(body.commissionRenewal),
     references: cleanRefs(body.references),
     employeePhotoUrl: cleanStr(body.employeePhotoUrl),
+    profileImageUrl: cleanStr(body.profileImageUrl),
     chqImageUrl: cleanStr(body.chqImageUrl),
     panImageUrl: cleanStr(body.panImageUrl),
 

@@ -41,7 +41,12 @@ async function saveThirdPartyCredentialController(req, res) {
     console.error('saveThirdPartyCredential error:', error);
     const msg = String(error?.message || '');
     const lower = msg.toLowerCase();
-    const status = lower.includes('required') || lower.includes('match code') ? 400 : 500;
+    const status =
+      error?.statusCode === 409
+        ? 409
+        : lower.includes('required') || lower.includes('match code')
+          ? 400
+          : 500;
     const clientMsg = msg || 'Failed to save 3P credential.';
     return res.status(status).json({ message: clientMsg });
   }

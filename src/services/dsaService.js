@@ -78,6 +78,35 @@ async function ensureWebsiteDsa({ dsaCode, name, companyName, mobile, email, cou
 }
 
 /** Backfill admin DSAs from existing 3P credentials. */
+async function getDsaProfileByCode(dsaCode) {
+  const code = cleanCode(dsaCode);
+  if (!code) {
+    return { companyName: '', country: '', shareRatio: 30, ownerName: '' };
+  }
+  const cred = await ThirdPartyCredential.findOne({ threePEmplCode: code })
+    .select('threePCompanyName country sharingThreeP name')
+    .lean();
+  if (cred) {
+    const shareRaw = Number(cred.sharingThreeP);
+    return {
+      companyName: String(cred.threePCompanyName || '').trim(),
+      country: String(cred.country || '').trim() || 'India',
+      shareRatio: Number.isFinite(shareRaw) && shareRaw > 0 ? shareRaw : 30,
+      ownerName: String(cred.name || '').trim(),
+    };
+  }
+  const dsa = await getDsaByCode(code);
+  if (dsa) {
+    return {
+      companyName: String(dsa.companyName || '').trim(),
+      country: String(dsa.country || '').trim() || 'India',
+      shareRatio: 30,
+      ownerName: String(dsa.name || '').trim(),
+    };
+  }
+  return { companyName: '', country: 'India', shareRatio: 30, ownerName: '' };
+}
+
 async function syncAdminDsasFromCredentials() {
   const creds = await ThirdPartyCredential.find({ threePEmplCode: { $ne: '' } })
     .select('threePEmplCode name threePCompanyName mobileNo email country status')
@@ -100,6 +129,7 @@ async function syncAdminDsasFromCredentials() {
 module.exports = {
   getWebsiteDsaCodes,
   getDsaByCode,
+  getDsaProfileByCode,
   isAdminPanelDsa,
   ensureAdminDsa,
   ensureWebsiteDsa,

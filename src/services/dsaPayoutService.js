@@ -1,4 +1,5 @@
 const DsaPayout = require('../models/DsaPayout');
+const ThirdPartyCredential = require('../models/ThirdPartyCredential');
 const dsaLimitService = require('./dsaLimitService');
 const {
   STATUS,
@@ -56,6 +57,28 @@ function statusQueryValue(statusFilter) {
   return norm;
 }
 
+async function companyNamesByDsaCodes(codes) {
+  const unique = [...new Set(
+    (codes || []).map((c) => cleanString(c).toUpperCase()).filter(Boolean),
+  )];
+  if (!unique.length) return {};
+  const creds = await ThirdPartyCredential.find({ threePEmplCode: { $in: unique } })
+    .select('threePEmplCode threePCompanyName')
+    .lean();
+  const map = {};
+  for (const cred of creds || []) {
+    const code = cleanString(cred.threePEmplCode).toUpperCase();
+    if (code) map[code] = cleanString(cred.threePCompanyName);
+  }
+  return map;
+}
+
+function resolveDsaDisplayName(dsaCode, companyNameMap) {
+  const code = cleanString(dsaCode).toUpperCase();
+  const company = code ? companyNameMap[code] : '';
+  return company || 'NA';
+}
+
 async function listPayouts({ dsaCode, status, limit = 500 } = {}) {
   const query = {};
   if (cleanString(dsaCode)) query.dsaCode = cleanString(dsaCode).toUpperCase();
@@ -64,7 +87,12 @@ async function listPayouts({ dsaCode, status, limit = 500 } = {}) {
     query.status = typeof statusVal === 'string' ? statusVal : statusVal;
   }
   const safeLimit = Math.min(Math.max(parseInt(String(limit), 10) || 500, 1), 2000);
-  return (await DsaPayout.find(query).sort({ createdAt: -1 }).limit(safeLimit).lean()) || [];
+  const rows = (await DsaPayout.find(query).sort({ createdAt: -1 }).limit(safeLimit).lean()) || [];
+  const companyNameMap = await companyNamesByDsaCodes(rows.map((r) => r.dsaCode));
+  return rows.map((row) => ({
+    ...row,
+    dsaName: resolveDsaDisplayName(row.dsaCode, companyNameMap),
+  }));
 }
 
 async function createPayout(payload) {
@@ -217,12 +245,12 @@ async function updatePayoutFieldsById(id, fields = {}) {
 async function getApprovedAvailableBalanceForDsa(dsaCode) {
   const code = cleanString(dsaCode).toUpperCase();
   if (!code) return 0;
-  const latest = await DsaPayout.findOne({ dsaCode: code, status: STATUS.APPROVED })
-    .sort({ approvedAt: -1, updatedAt: -1 })
+  const approved = await DsaPayout.find({ dsaCode: code, status: STATUS.APPROVED })
     .select('calculatedLimit currencyInr shareRatio availableBalance')
     .lean();
-  if (!latest) return 0;
-  return resolveTotalApprovedLimit(latest);
+  if (!approved?.length) return 0;
+  const total = approved.reduce((sum, rec) => sum + resolveTotalApprovedLimit(rec), 0);
+  return Number(total.toFixed(2));
 }
 
 module.exports = {

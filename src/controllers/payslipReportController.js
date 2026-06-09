@@ -43,15 +43,16 @@ async function generatePayslipReportController(req, res) {
   if (!code) {
     return res.status(400).json({ message: 'employeeCode is required.' });
   }
+  const isAll = code === 'ALL' || code === '__ALL__';
   const isAdmin = String(req.user?.role || '').toLowerCase() === 'admin';
   const selfCode = String(req.user?.employeeCode || req.user?.username || '').trim().toUpperCase();
-  if (!isAdmin && selfCode && code !== selfCode) {
+  if (!isAdmin && !isAll && selfCode && code !== selfCode) {
     return res.status(403).json({ message: 'You can only view your own payslip.' });
   }
   const filters = {
     financialYear,
-    employeeCode: code || undefined,
-    department: code ? undefined : department,
+    employeeCode: isAll ? undefined : code,
+    department: isAll ? undefined : (code ? undefined : department),
     reportType,
     period,
     month,

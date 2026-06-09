@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Shareholder = require('../models/Shareholder');
 const ShareholdingHistory = require('../models/ShareholdingHistory');
 const ShareholdingLegacy = require('../models/ShareholdingLegacy');
@@ -34,6 +35,14 @@ function normalizeProjectKey(k) {
   return s || '_';
 }
 
+function isValidObjectId(id) {
+  if (id == null) return false;
+  const s = String(id).trim();
+  if (!s) return false;
+  if (!mongoose.Types.ObjectId.isValid(s)) return false;
+  return String(new mongoose.Types.ObjectId(s)) === s;
+}
+
 function identityFieldsFromPayload(payload) {
   return {
     name: payload.name,
@@ -57,8 +66,10 @@ function historyFieldsFromPayload(payload) {
     mode: payload.mode,
     isinCode: payload.isinCode,
     dpNumber: payload.dpNumber,
+    dp: payload.dp,
     beneficiaryDpId: payload.beneficiaryDpId,
     folioNumber: payload.folioNumber,
+    certificateNumber: payload.certificateNumber,
     distinctiveFrom: payload.distinctiveFrom,
     distinctiveTo: payload.distinctiveTo,
     yearOfIssuance: payload.yearOfIssuance,
@@ -100,8 +111,10 @@ function mergeShareholderAndHistory(sh, hist) {
     mode: h.mode,
     isinCode: h.isinCode,
     dpNumber: h.dpNumber,
+    dp: h.dp,
     beneficiaryDpId: h.beneficiaryDpId,
     folioNumber: h.folioNumber,
+    certificateNumber: h.certificateNumber,
     distinctiveFrom: h.distinctiveFrom,
     distinctiveTo: h.distinctiveTo,
     yearOfIssuance: h.yearOfIssuance,
@@ -230,7 +243,8 @@ async function upsertShareholding(payload) {
   const pan = normalizePan(payload.pan);
   if (!pan) throw new Error('PAN is required');
 
-  const historyId = payload.historyId ? String(payload.historyId).trim() : '';
+  const rawHistoryId = payload.historyId ? String(payload.historyId).trim() : '';
+  const historyId = isValidObjectId(rawHistoryId) ? rawHistoryId : '';
   const year = normalizeYear(payload.year);
   const projectKey = normalizeProjectKey(payload.projectKey);
 
@@ -411,10 +425,20 @@ async function deleteHistoryById(pan, historyId) {
   return res.deletedCount || 0;
 }
 
+function parseDateRange(fromDate, toDate) {
+  const from = String(fromDate || '').trim();
+  const to = String(toDate || '').trim();
+  if (!from || !to) return null;
+  const start = new Date(`${from}T00:00:00.000Z`);
+  const end = new Date(`${to}T23:59:59.999Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  return { from: start, to: end };
+}
+
 async function listShareholdingMISRows(filters) {
-  const { financialYear, month, department, status } = filters || {};
-  let range = null;
-  if (financialYear && month) {
+  const { financialYear, month, fromDate, toDate, department, status } = filters || {};
+  let range = parseDateRange(fromDate, toDate);
+  if (!range && financialYear && month) {
     range = fyMonthToUtcRange(financialYear, month);
   }
 

@@ -22,8 +22,10 @@ async function saveShareholdingController(req, res) {
     mode,
     isinCode,
     dpNumber,
+    dp,
     beneficiaryDpId,
     folioNumber,
+    certificateNumber,
     distinctiveFrom,
     distinctiveTo,
     yearOfIssuance,
@@ -67,8 +69,10 @@ async function saveShareholdingController(req, res) {
       mode,
       isinCode,
       dpNumber,
+      dp,
       beneficiaryDpId,
       folioNumber,
+      certificateNumber,
       distinctiveFrom,
       distinctiveTo,
       yearOfIssuance,
@@ -97,13 +101,21 @@ async function saveShareholdingController(req, res) {
     // eslint-disable-next-line no-console
     console.error('saveShareholding error:', error);
     const msg = error?.message || 'Failed to save shareholding record.';
+    if (error?.code === 11000) {
+      return res.status(400).json({
+        message: 'Another history entry already exists for this year and project reference.',
+      });
+    }
     if (
+      error?.name === 'ValidationError' ||
+      error?.name === 'CastError' ||
       String(msg).includes('Invalid history') ||
-      String(msg).includes('Another history entry')
+      String(msg).includes('Another history entry') ||
+      String(msg).includes('PAN is required')
     ) {
       return res.status(400).json({ message: msg });
     }
-    return res.status(500).json({ message: 'Failed to save shareholding record.' });
+    return res.status(500).json({ message: msg });
   }
 }
 
@@ -173,11 +185,12 @@ async function deleteShareholdingController(req, res) {
 }
 
 async function exportShareholdingMISController(req, res) {
-  const { financialYear, month, department, status, format } = req.body || {};
+  const { fromDate, toDate, financialYear, month, department, status, format } = req.body || {};
 
   try {
-    if (!financialYear || !month) {
-      return res.status(400).json({ message: 'Financial year and month are required.' });
+    const hasDateRange = Boolean(String(fromDate || '').trim() && String(toDate || '').trim());
+    if (!hasDateRange && (!financialYear || !month)) {
+      return res.status(400).json({ message: 'From date and to date are required.' });
     }
     if (format && String(format).toLowerCase() === 'pdf') {
       return res.status(400).json({
@@ -186,6 +199,8 @@ async function exportShareholdingMISController(req, res) {
     }
 
     const merged = await shareholdingService.listShareholdingMISRows({
+      fromDate,
+      toDate,
       financialYear,
       month,
       department,
@@ -250,13 +265,14 @@ async function exportShareholdingMISController(req, res) {
       'Nominee 3 PAN': sh.nominees?.[2]?.pan || '',
     }));
 
-    const wb = XLSX.utils.book_new();
-    let ws;
     if (flat.length === 0) {
-      ws = XLSX.utils.aoa_to_sheet([['No shareholding rows for the selected MIS filters.']]);
-    } else {
-      ws = XLSX.utils.json_to_sheet(flat);
+      return res.status(404).json({
+        message: 'No data found to generate MIS for the selected date range.',
+      });
     }
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(flat);
     XLSX.utils.book_append_sheet(wb, ws, 'MIS_Shareholding');
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 

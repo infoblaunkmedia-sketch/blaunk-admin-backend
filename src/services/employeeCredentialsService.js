@@ -2,7 +2,7 @@ const EmployeeCredentials = require('../models/EmployeeCredentials');
 
 /** Schema top-level keys that can be saved (matches EmployeeCredentials model). */
 const ALLOWED_KEYS = new Set([
-  'pan', 'employeeName', 'mobile', 'email', 'aadhaar', 'empCode', 'address', 'city', 'zip',
+  'pan', 'employeeName', 'mobile', 'email', 'aadhaar', 'empCode', 'address', 'address2', 'city', 'zip',
   'country', 'state', 'gender', 'yearlyCtc', 'department', 'designation', 'bankName', 'ifscCode',
   'micrCode', 'bankAccountNumber', 'medicalInsuranceNo', 'medicalInsurer', 'gratuityNo', 'gratuityInsurer',
   'bonus', 'pfRequest', 'esiInsuranceNo', 'npsSubscriptionNo', 'ctcDivisorDays', 'pfContributionEmployer',

@@ -1,7 +1,7 @@
 const express = require('express');
 const { authMiddleware } = require('../middleware/authMiddleware');
 const { requireRole, ROLES } = require('../middleware/requireRole');
-const { requireSection } = require('../middleware/requirePermission');
+const { requireSection, requireAnySection } = require('../middleware/requirePermission');
 const {
   saveShareholdingController,
   listShareholdingsController,
@@ -21,7 +21,16 @@ const corporateGuard = [
 
 router.get('/', corporateGuard, listShareholdingsController);
 router.post('/', corporateGuard, saveShareholdingController);
-router.post('/mis-export', corporateGuard, exportShareholdingMISController);
+const misExportGuard = [
+  authMiddleware,
+  requireRole(ROLES.ADMIN, ROLES.EMP),
+  requireAnySection([
+    ['corporate', 'shareholding'],
+    ['corporate', 'mis'],
+  ]),
+];
+
+router.post('/mis-export', misExportGuard, exportShareholdingMISController);
 router.delete('/:pan/history/:historyId', corporateGuard, deleteShareholdingHistoryController);
 router.get('/:pan', corporateGuard, getShareholdingController);
 router.delete('/:pan', corporateGuard, deleteShareholdingController);

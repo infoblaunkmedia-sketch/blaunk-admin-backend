@@ -5,7 +5,7 @@ async function listPayoutsController(req, res) {
   const { dsaCode, status, limit } = req.query || {};
   try {
     let resolvedDsaCode = dsaCode;
-    if (!isAdminUser(req.user)) {
+    if (is3pUser(req.user)) {
       const ownCode = getSubjectCode(req.user);
       if (!ownCode) {
         return res.status(403).json({ message: 'Only users mapped with a DSA code can access payouts.' });

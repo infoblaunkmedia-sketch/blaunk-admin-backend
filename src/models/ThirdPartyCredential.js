@@ -58,6 +58,7 @@ const thirdPartyCredentialSchema = new mongoose.Schema(
     // References + document images (URLs to /uploads)
     references: { type: [referenceSchema], default: [] },
     employeePhotoUrl: { type: String, trim: true, default: '' },
+    profileImageUrl: { type: String, trim: true, default: '' },
     chqImageUrl: { type: String, trim: true, default: '' },
     panImageUrl: { type: String, trim: true, default: '' },
 
