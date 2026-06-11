@@ -133,13 +133,20 @@ async function meController(req, res) {
       // leave email unset on lookup error
     }
   }
-  if (user.employeeCode) {
+  const empLookupCode = String(user.employeeCode || user.username || '')
+    .trim()
+    .toUpperCase();
+  if (empLookupCode) {
     try {
       const emp = await EmployeeCredentials.findOne(
-        { empCode: String(user.employeeCode).trim() },
-        { department: 1 },
+        { empCode: empLookupCode },
+        { department: 1, employeeName: 1 },
       ).lean();
-      if (emp && emp.department) user.department = emp.department;
+      if (emp) {
+        if (emp.department) user.department = emp.department;
+        if (emp.employeeName) user.employeeName = emp.employeeName;
+        if (!user.employeeCode) user.employeeCode = empLookupCode;
+      }
     } catch {
       // leave department unset on lookup error
     }

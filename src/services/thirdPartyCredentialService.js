@@ -111,6 +111,8 @@ async function upsertThirdPartyCredential(payload) {
     exitDate: cleanStr(body.exitDate),
     verifiedStatus: cleanStr(body.verifiedStatus),
     businessDeposit: cleanStr(body.businessDeposit),
+    businessDepositCurrency: cleanStr(body.businessDepositCurrency),
+    verifierFees: cleanStr(body.verifierFees),
     sharingThreeP: cleanStr(body.sharingThreeP),
     sharingBlaunk: cleanStr(body.sharingBlaunk),
     commissionSubscriber: cleanStr(body.commissionSubscriber),

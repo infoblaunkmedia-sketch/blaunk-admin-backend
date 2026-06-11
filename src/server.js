@@ -175,7 +175,9 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'blaunk-admin-auth' });
 });
 
+const adminMacDeviceRoutes = require('./routes/adminMacDeviceRoutes');
 app.use('/admin', adminIpWhitelistRoutes);
+app.use('/admin', adminMacDeviceRoutes);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);

@@ -3,6 +3,11 @@ const Shareholder = require('../models/Shareholder');
 const ShareholdingHistory = require('../models/ShareholdingHistory');
 const ShareholdingLegacy = require('../models/ShareholdingLegacy');
 const EmployeeCredentials = require('../models/EmployeeCredentials');
+const {
+  buildMisRowObject,
+  sheetRowsToPayloads,
+  validateMisPayload,
+} = require('../utils/shareholdingMis');
 
 const FY_MONTHS = [
   'April',
@@ -50,15 +55,37 @@ function identityFieldsFromPayload(payload) {
     email: payload.email,
     aadhaar: payload.aadhaar,
     address: payload.address,
+    addressLine2: payload.addressLine2,
     city: payload.city,
+    area: payload.area,
     landmark: payload.landmark,
+    pincode: payload.pincode,
+    state: payload.state,
     country: payload.country,
     gender: payload.gender,
+    formSubmission: payload.formSubmission,
   };
 }
 
+function sanitizeNominees(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((n) => ({
+      name: String(n?.name || '').trim(),
+      mobile: String(n?.mobile || '').replace(/\D/g, '').slice(0, 10),
+      relation: String(n?.relation || '').trim(),
+      percentage:
+        n?.percentage != null && n?.percentage !== '' && !Number.isNaN(Number(n.percentage))
+          ? Number(n.percentage)
+          : undefined,
+      pan: String(n?.pan || '').trim().toUpperCase(),
+    }))
+    .filter((n) => n.name || n.mobile || n.relation || n.pan || n.percentage != null);
+}
+
 function historyFieldsFromPayload(payload) {
-  return {
+  const nominees = sanitizeNominees(payload.nominees);
+  const fields = {
     holdingPercent: payload.holdingPercent,
     shareType: payload.shareType,
     faceValue: payload.faceValue,
@@ -84,8 +111,11 @@ function historyFieldsFromPayload(payload) {
     bankCountry: payload.bankCountry,
     pledge: payload.pledge,
     shareStatus: payload.shareStatus,
-    nominees: Array.isArray(payload.nominees) ? payload.nominees : [],
   };
+  if (nominees.length) {
+    fields.nominees = nominees;
+  }
+  return fields;
 }
 
 function mergeShareholderAndHistory(sh, hist) {
@@ -100,10 +130,15 @@ function mergeShareholderAndHistory(sh, hist) {
     email: s.email,
     aadhaar: s.aadhaar,
     address: s.address,
+    addressLine2: s.addressLine2,
     city: s.city,
+    area: s.area,
     landmark: s.landmark,
+    pincode: s.pincode,
+    state: s.state,
     country: s.country,
     gender: s.gender,
+    formSubmission: s.formSubmission,
     holdingPercent: h.holdingPercent,
     shareType: h.shareType,
     faceValue: h.faceValue,
@@ -131,6 +166,7 @@ function mergeShareholderAndHistory(sh, hist) {
     bankCountry: h.bankCountry,
     pledge: h.pledge,
     shareStatus: h.shareStatus,
+    dataEntryBy: h.dataEntryBy,
     nominees: h.nominees,
     createdAt: h.createdAt,
     updatedAt: h.updatedAt,
@@ -291,6 +327,7 @@ async function upsertShareholding(payload) {
       { new: true },
     ).lean();
   } else {
+    const dataEntryBy = String(payload.dataEntryBy || '').trim();
     historyDoc = await ShareholdingHistory.findOneAndUpdate(
       { pan, year, projectKey },
       {
@@ -301,6 +338,7 @@ async function upsertShareholding(payload) {
           shareholder: shareholder._id,
           ...historyData,
         },
+        ...(dataEntryBy ? { $setOnInsert: { dataEntryBy } } : {}),
       },
       { new: true, upsert: true, setDefaultsOnInsert: true },
     ).lean();
@@ -334,6 +372,90 @@ function panRegexCaseInsensitive(panUpper) {
   return new RegExp(`^${escaped}$`, 'i');
 }
 
+function pickNonEmpty(...values) {
+  for (const value of values) {
+    const s = value != null ? String(value).trim() : '';
+    if (s) return s;
+  }
+  return '';
+}
+
+function shareholderFromCredential(credential, pan) {
+  if (!credential) return null;
+  const p = normalizePan(credential.pan || pan);
+  if (!p) return null;
+  return {
+    pan: p,
+    name: String(credential.employeeName || ''),
+    mobile: String(credential.mobile || ''),
+    email: String(credential.email || ''),
+    aadhaar: String(credential.aadhaar || ''),
+    address: String(credential.address || ''),
+    addressLine2: String(credential.address2 || ''),
+    city: String(credential.city || ''),
+    area: String(credential.bankArea || ''),
+    landmark: '',
+    pincode: String(credential.zip || ''),
+    state: String(credential.state || ''),
+    country: String(credential.country || ''),
+    gender: String(credential.gender || ''),
+    formSubmission: '',
+  };
+}
+
+function enrichShareholderFromCredential(shareholder, credential, pan) {
+  const fromCred = shareholderFromCredential(credential, pan);
+  if (!shareholder && !fromCred) return null;
+  if (!shareholder) return fromCred;
+  if (!fromCred) return shareholder;
+  return {
+    ...shareholder,
+    pan: pickNonEmpty(shareholder.pan, fromCred.pan),
+    name: pickNonEmpty(shareholder.name, fromCred.name),
+    mobile: pickNonEmpty(shareholder.mobile, fromCred.mobile),
+    email: pickNonEmpty(shareholder.email, fromCred.email),
+    aadhaar: pickNonEmpty(shareholder.aadhaar, fromCred.aadhaar),
+    address: pickNonEmpty(shareholder.address, fromCred.address),
+    addressLine2: pickNonEmpty(shareholder.addressLine2, fromCred.addressLine2),
+    city: pickNonEmpty(shareholder.city, fromCred.city),
+    area: pickNonEmpty(shareholder.area, fromCred.area),
+    landmark: pickNonEmpty(shareholder.landmark, fromCred.landmark),
+    pincode: pickNonEmpty(shareholder.pincode, fromCred.pincode),
+    state: pickNonEmpty(shareholder.state, fromCred.state),
+    country: pickNonEmpty(shareholder.country, fromCred.country),
+    gender: pickNonEmpty(shareholder.gender, fromCred.gender),
+    formSubmission: pickNonEmpty(shareholder.formSubmission, fromCred.formSubmission),
+  };
+}
+
+async function loadCredentialMap(pans) {
+  const unique = [...new Set((pans || []).map((p) => normalizePan(p)).filter(Boolean))];
+  if (!unique.length) return {};
+  const creds = await EmployeeCredentials.find({
+    $expr: { $in: [{ $toUpper: '$pan' }, unique] },
+  }).lean();
+  const credMap = {};
+  creds.forEach((c) => {
+    credMap[normalizePan(c.pan)] = c;
+  });
+  return credMap;
+}
+
+/** One MIS row per distinct history period (PAN + year + project), keeping the latest update for each. */
+function dedupeHistoryByPeriodKey(historyRows) {
+  const seen = new Set();
+  const out = [];
+  for (const hist of historyRows || []) {
+    const p = normalizePan(hist.pan);
+    if (!p) continue;
+    const key = `${p}|${String(hist.year || '_')}|${String(hist.projectKey || '_')}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(hist);
+  }
+  return out;
+}
+
 async function getCombinedByPan(pan) {
   const p = normalizePan(pan);
   if (!p) return null;
@@ -342,7 +464,7 @@ async function getCombinedByPan(pan) {
     EmployeeCredentials.findOne({ pan: panRegexCaseInsensitive(p) }).lean(),
   ]);
   if (!bundle?.shareholder && !credential) return null;
-  const shareholder = bundle?.shareholder || null;
+  const shareholder = enrichShareholderFromCredential(bundle?.shareholder || null, credential, p);
   const history = bundle?.history || [];
   return {
     shareholder,
@@ -400,12 +522,16 @@ async function listShareholdings({ q, limit = 200 } = {}) {
     if (!latestByPan[key]) latestByPan[key] = h;
   }
 
+  const credMap = await loadCredentialMap(pans);
+
   return shareholders.map((sh) => {
-    const latest = latestByPan[sh.pan];
-    const merged = mergeShareholderAndHistory(sh, latest);
+    const panKey = normalizePan(sh.pan);
+    const latest = latestByPan[panKey];
+    const enriched = enrichShareholderFromCredential(sh, credMap[panKey], panKey) || sh;
+    const merged = mergeShareholderAndHistory(enriched, latest);
     return {
       ...merged,
-      historyCount: countByPan[sh.pan] || 0,
+      historyCount: countByPan[panKey] || 0,
     };
   });
 }
@@ -462,33 +588,54 @@ async function listShareholdingMISRows(filters) {
   if (panSet) {
     rows = rows.filter((r) => panSet.has(normalizePan(r.pan)));
   }
+  rows = dedupeHistoryByPeriodKey(rows);
 
   const pans = rows.map((r) => normalizePan(r.pan)).filter(Boolean);
   const shareholderMap = {};
   if (pans.length) {
     const shs = await Shareholder.find({ pan: { $in: [...new Set(pans)] } }).lean();
     shs.forEach((s) => {
-      shareholderMap[s.pan] = s;
+      shareholderMap[normalizePan(s.pan)] = s;
     });
   }
 
-  const credMap = {};
-  if (pans.length > 0) {
-    const creds = await EmployeeCredentials.find({
-      $expr: { $in: [{ $toUpper: '$pan' }, [...new Set(pans)]] },
-    }).lean();
-    creds.forEach((c) => {
-      credMap[normalizePan(c.pan)] = c;
-    });
-  }
+  const credMap = await loadCredentialMap(pans);
 
-  return rows.map((hist) => {
+  return rows.map((hist, index) => {
     const p = normalizePan(hist.pan);
-    const identity = shareholderMap[p] || {};
     const c = credMap[p];
+    const identity = enrichShareholderFromCredential(shareholderMap[p] || null, c, p) || {};
     const sh = mergeShareholderAndHistory(identity, hist);
-    return { shareholding: sh, credential: c || null };
+    return buildMisRowObject(sh, c || null, index + 1);
   });
+}
+
+async function importShareholdingMISRows(sheetRows, { dataEntryBy } = {}) {
+  const parsed = sheetRowsToPayloads(sheetRows);
+  if (!parsed.length) {
+    throw new Error('No data rows found in the uploaded file.');
+  }
+
+  const errors = [];
+  parsed.forEach(({ rowNumber, payload }) => {
+    errors.push(...validateMisPayload(payload, rowNumber));
+  });
+  if (errors.length) {
+    const err = new Error(errors.slice(0, 20).join(' '));
+    err.validationErrors = errors;
+    throw err;
+  }
+
+  let imported = 0;
+  for (const { payload } of parsed) {
+    const actor = String(payload.dataEntryBy || dataEntryBy || '').trim();
+    await upsertShareholding({
+      ...payload,
+      dataEntryBy: actor,
+    });
+    imported += 1;
+  }
+  return { imported, total: parsed.length };
 }
 
 module.exports = {
@@ -499,6 +646,7 @@ module.exports = {
   deleteByPan,
   deleteHistoryById,
   listShareholdingMISRows,
+  importShareholdingMISRows,
   fyMonthToUtcRange,
   migrateLegacyShareholdingsIfNeeded,
   mergeShareholderAndHistory,

@@ -50,6 +50,8 @@ const thirdPartyCredentialSchema = new mongoose.Schema(
     exitDate: { type: String, trim: true, default: '' },
     verifiedStatus: { type: String, trim: true, default: '' },
     businessDeposit: { type: String, trim: true, default: '' },
+    businessDepositCurrency: { type: String, trim: true, default: '' },
+    verifierFees: { type: String, trim: true, default: '' },
     sharingThreeP: { type: String, trim: true, default: '' },
     sharingBlaunk: { type: String, trim: true, default: '' },
     commissionSubscriber: { type: String, trim: true, default: '' },

@@ -1,94 +1,25 @@
 const XLSX = require('xlsx');
 const shareholdingService = require('../services/shareholdingService');
+const { MIS_HEADERS, MIS_ROW_KEYS } = require('../utils/shareholdingMis');
+
+function resolveDataEntryBy(req) {
+  return String(
+    req.user?.employeeCode || req.user?.username || req.user?.name || req.user?.employeeName || '',
+  ).trim();
+}
 
 async function saveShareholdingController(req, res) {
-  const {
-    historyId,
-    projectKey,
-    pan,
-    name,
-    mobile,
-    email,
-    aadhaar,
-    address,
-    city,
-    landmark,
-    country,
-    gender,
-    holdingPercent,
-    shareType,
-    faceValue,
-    numberOfShares,
-    mode,
-    isinCode,
-    dpNumber,
-    dp,
-    beneficiaryDpId,
-    folioNumber,
-    certificateNumber,
-    distinctiveFrom,
-    distinctiveTo,
-    yearOfIssuance,
-    stakeholder,
-    dateOfAllotment,
-    remarks,
-    exitDate,
-    year,
-    bankName,
-    ifscCode,
-    bankAccountNumber,
-    bankCity,
-    bankCountry,
-    pledge,
-    shareStatus,
-    nominees = [],
-  } = req.body || {};
+  const body = req.body || {};
 
-  if (!pan) {
+  if (!body.pan) {
     return res.status(400).json({ message: 'PAN is required.' });
   }
 
   try {
+    const dataEntryBy = resolveDataEntryBy(req);
     const result = await shareholdingService.upsertShareholding({
-      historyId,
-      projectKey,
-      pan,
-      name,
-      mobile,
-      email,
-      aadhaar,
-      address,
-      city,
-      landmark,
-      country,
-      gender,
-      holdingPercent,
-      shareType,
-      faceValue,
-      numberOfShares,
-      mode,
-      isinCode,
-      dpNumber,
-      dp,
-      beneficiaryDpId,
-      folioNumber,
-      certificateNumber,
-      distinctiveFrom,
-      distinctiveTo,
-      yearOfIssuance,
-      stakeholder,
-      dateOfAllotment,
-      remarks,
-      exitDate,
-      year,
-      bankName,
-      ifscCode,
-      bankAccountNumber,
-      bankCity,
-      bankCountry,
-      pledge,
-      shareStatus,
-      nominees,
+      ...body,
+      ...(dataEntryBy ? { dataEntryBy } : {}),
     });
 
     return res.status(200).json({
@@ -184,6 +115,36 @@ async function deleteShareholdingController(req, res) {
   }
 }
 
+async function listShareholdingMISController(req, res) {
+  const { fromDate, toDate, financialYear, month, department, status } = req.query || req.body || {};
+
+  try {
+    const hasDateRange = Boolean(String(fromDate || '').trim() && String(toDate || '').trim());
+    if (!hasDateRange && (!financialYear || !month)) {
+      return res.status(400).json({ message: 'From date and to date are required.' });
+    }
+
+    const rows = await shareholdingService.listShareholdingMISRows({
+      fromDate,
+      toDate,
+      financialYear,
+      month,
+      department,
+      status,
+    });
+
+    return res.json({
+      headers: MIS_HEADERS,
+      rows,
+      total: rows.length,
+    });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('listShareholdingMIS error:', error);
+    return res.status(500).json({ message: 'Failed to load MIS data.' });
+  }
+}
+
 async function exportShareholdingMISController(req, res) {
   const { fromDate, toDate, financialYear, month, department, status, format } = req.body || {};
 
@@ -198,7 +159,7 @@ async function exportShareholdingMISController(req, res) {
       });
     }
 
-    const merged = await shareholdingService.listShareholdingMISRows({
+    const misRows = await shareholdingService.listShareholdingMISRows({
       fromDate,
       toDate,
       financialYear,
@@ -207,72 +168,19 @@ async function exportShareholdingMISController(req, res) {
       status,
     });
 
-    const flat = merged.map(({ shareholding: sh, credential: c }) => ({
-      PAN: sh.pan,
-      'Updated At': sh.updatedAt ? new Date(sh.updatedAt).toISOString() : '',
-      'HR Employee Name': c?.employeeName || '',
-      'HR Emp Code': c?.empCode || '',
-      'HR Department': c?.department || '',
-      'HR Designation': c?.designation || '',
-      'HR Status': c?.status || '',
-      'Name (Shareholding)': sh.name || '',
-      Mobile: sh.mobile || '',
-      Email: sh.email || '',
-      Aadhaar: sh.aadhaar || '',
-      Address: sh.address || '',
-      City: sh.city || '',
-      Landmark: sh.landmark || '',
-      Country: sh.country || '',
-      Gender: sh.gender || '',
-      'Holding %': sh.holdingPercent ?? '',
-      'Share Type': sh.shareType || '',
-      'Face Value': sh.faceValue ?? '',
-      'No. of Shares': sh.numberOfShares ?? '',
-      Mode: sh.mode || '',
-      'ISIN Code': sh.isinCode || '',
-      'DP Number': sh.dpNumber || '',
-      'Beneficiary DP ID': sh.beneficiaryDpId || '',
-      'Folio Number': sh.folioNumber || '',
-      'Distinctive From': sh.distinctiveFrom || '',
-      'Distinctive To': sh.distinctiveTo || '',
-      'Year of Issuance': sh.yearOfIssuance || '',
-      Stakeholder: sh.stakeholder || '',
-      'Date of Allotment': sh.dateOfAllotment || '',
-      Remarks: sh.remarks || '',
-      'Exit Date': sh.exitDate || '',
-      Year: sh.year || '',
-      'Bank Name': sh.bankName || '',
-      'IFSC Code': sh.ifscCode || '',
-      'Bank Account No.': sh.bankAccountNumber || '',
-      'Bank City': sh.bankCity || '',
-      'Bank Country': sh.bankCountry || '',
-      Pledge: sh.pledge || '',
-      Status: sh.shareStatus || '',
-      'Nominee 1 Name': sh.nominees?.[0]?.name || '',
-      'Nominee 1 Mobile': sh.nominees?.[0]?.mobile || '',
-      'Nominee 1 Relation': sh.nominees?.[0]?.relation || '',
-      'Nominee 1 %': sh.nominees?.[0]?.percentage ?? '',
-      'Nominee 1 PAN': sh.nominees?.[0]?.pan || '',
-      'Nominee 2 Name': sh.nominees?.[1]?.name || '',
-      'Nominee 2 Mobile': sh.nominees?.[1]?.mobile || '',
-      'Nominee 2 Relation': sh.nominees?.[1]?.relation || '',
-      'Nominee 2 %': sh.nominees?.[1]?.percentage ?? '',
-      'Nominee 2 PAN': sh.nominees?.[1]?.pan || '',
-      'Nominee 3 Name': sh.nominees?.[2]?.name || '',
-      'Nominee 3 Mobile': sh.nominees?.[2]?.mobile || '',
-      'Nominee 3 Relation': sh.nominees?.[2]?.relation || '',
-      'Nominee 3 %': sh.nominees?.[2]?.percentage ?? '',
-      'Nominee 3 PAN': sh.nominees?.[2]?.pan || '',
-    }));
-
-    if (flat.length === 0) {
+    if (misRows.length === 0) {
       return res.status(404).json({
         message: 'No data found to generate MIS for the selected date range.',
       });
     }
 
+    const sheetRows = [
+      MIS_HEADERS,
+      ...misRows.map((row) => MIS_ROW_KEYS.map((key) => row[key] ?? '')),
+    ];
+
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(flat);
+    const ws = XLSX.utils.aoa_to_sheet(sheetRows);
     XLSX.utils.book_append_sheet(wb, ws, 'MIS_Shareholding');
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
@@ -292,12 +200,50 @@ async function exportShareholdingMISController(req, res) {
   }
 }
 
+async function importShareholdingMISController(req, res) {
+  if (!req.file?.buffer) {
+    return res.status(400).json({ message: 'Excel file is required (field name: file).' });
+  }
+
+  try {
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) {
+      return res.status(400).json({ message: 'Uploaded workbook has no sheets.' });
+    }
+    const sheetRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+      header: 1,
+      defval: '',
+      raw: false,
+    });
+    const result = await shareholdingService.importShareholdingMISRows(sheetRows, {
+      dataEntryBy: resolveDataEntryBy(req),
+    });
+    return res.json({
+      message: `Imported ${result.imported} shareholding row(s).`,
+      ...result,
+    });
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('importShareholdingMIS error:', error);
+    if (error.validationErrors) {
+      return res.status(400).json({
+        message: error.message || 'Validation failed for imported rows.',
+        errors: error.validationErrors,
+      });
+    }
+    return res.status(500).json({ message: error?.message || 'Failed to import MIS file.' });
+  }
+}
+
 module.exports = {
   saveShareholdingController,
   listShareholdingsController,
   getShareholdingController,
   deleteShareholdingHistoryController,
   deleteShareholdingController,
+  listShareholdingMISController,
   exportShareholdingMISController,
+  importShareholdingMISController,
 };
 

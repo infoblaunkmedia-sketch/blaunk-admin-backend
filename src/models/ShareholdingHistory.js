@@ -47,6 +47,7 @@ const shareholdingHistorySchema = new mongoose.Schema(
     bankCountry: String,
     pledge: String,
     shareStatus: String,
+    dataEntryBy: String,
     nominees: [nomineeSchema],
   },
   { timestamps: true },
