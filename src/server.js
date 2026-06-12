@@ -447,6 +447,13 @@ async function start() {
     app.listen(PORT, () => {
       // eslint-disable-next-line no-console
       console.log(`${LOG_PREFIX} Listening on port ${PORT}`);
+      try {
+        const { startMacAgent } = require('./utils/startMacAgent');
+        startMacAgent((msg) => console.log(`${LOG_PREFIX} ${msg}`));
+      } catch (agentErr) {
+        // eslint-disable-next-line no-console
+        console.warn(`${LOG_PREFIX} MAC agent auto-start skipped`, agentErr?.message || agentErr);
+      }
     });
   } catch (error) {
     logErrorDetail('Step 3 FAILED (HTTP bind)', error);

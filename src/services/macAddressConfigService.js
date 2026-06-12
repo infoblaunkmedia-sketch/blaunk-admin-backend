@@ -1,4 +1,5 @@
 const MacAddressConfig = require('../models/MacAddressConfig');
+const { formatMacDisplay, normalizeMac } = require('../utils/macAddress');
 
 function rowFromDoc(doc) {
   return {
@@ -115,21 +116,34 @@ async function saveAll(rows) {
 async function getItDevices({ linkedType, linkedCode } = {}) {
   const query = { forItManagement: true, forRights: { $ne: true } };
   if (linkedType) query.linkedType = String(linkedType).trim();
-  if (linkedCode) query.linkedCode = String(linkedCode).trim();
+  if (linkedCode) {
+    const code = String(linkedCode).trim();
+    const escaped = code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    query.linkedCode = new RegExp(`^${escaped}$`, 'i');
+  }
   const list = await MacAddressConfig.find(query).sort({ createdAt: -1 }).lean();
   return (list || []).filter(isItManagementRow).map(itRowFromDoc);
 }
 
+function storeMac(raw) {
+  const normalized = normalizeMac(raw);
+  if (!normalized) {
+    const trimmed = String(raw || '').trim();
+    return trimmed;
+  }
+  return formatMacDisplay(normalized);
+}
+
 async function createItDevice(payload) {
   const body = payload || {};
-  const mac = body.macAddress != null ? String(body.macAddress).trim() : '';
-  if (!mac) {
+  const mac = storeMac(body.macAddress);
+  if (!mac || !normalizeMac(mac)) {
     const err = new Error('MAC address is required.');
     err.statusCode = 400;
     throw err;
   }
   const linkedType = body.linkedType === '3pc' ? '3pc' : 'employee';
-  const linkedCode = String(body.linkedCode || '').trim();
+  const linkedCode = String(body.linkedCode || '').trim().toUpperCase();
   if (!linkedCode) {
     const err = new Error('Employee / 3P code is required.');
     err.statusCode = 400;
@@ -155,7 +169,15 @@ async function updateItDevice(id, patch) {
   const existing = await MacAddressConfig.findById(id).lean();
   if (!existing || !isItManagementRow(existing)) return null;
   const $set = {};
-  if (patch.macAddress !== undefined) $set.macAddress = String(patch.macAddress).trim();
+  if (patch.macAddress !== undefined) {
+    const mac = storeMac(patch.macAddress);
+    if (!mac || !normalizeMac(mac)) {
+      const err = new Error('Invalid MAC address format.');
+      err.statusCode = 400;
+      throw err;
+    }
+    $set.macAddress = mac;
+  }
   if (patch.computerBrand !== undefined) $set.computerBrand = String(patch.computerBrand).trim();
   if (patch.systemType !== undefined) $set.systemType = String(patch.systemType).trim();
   if (patch.status !== undefined) $set.status = patch.status === 'Inactive' ? 'Inactive' : 'Active';

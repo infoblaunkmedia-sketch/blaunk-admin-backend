@@ -4,7 +4,9 @@ const ThirdPartyCredential = require('../models/ThirdPartyCredential');
 const User = require('../models/User');
 const Admin = require('../models/Admin');
 const ipWhitelistService = require('../services/ipWhitelistService');
+const macAddressEnforcementService = require('../services/macAddressEnforcementService');
 const { getClientIp } = require('../middleware/checkIPWhitelist');
+const { resolveLoginClientMac } = require('../utils/resolveLoginClientMac');
 
 async function forgotPasswordController(req, res) {
   const { email } = req.body || {};
@@ -85,6 +87,23 @@ async function loginController(req, res) {
       const permitted = await ipWhitelistService.isRequestAllowed(clientIp);
       if (!permitted) {
         return res.status(403).json({ message: 'Access Denied: Unauthorized IP' });
+      }
+    }
+
+    // MAC device registry (IT → MAC Address): employees and 3P — only approved laptop MAC(s).
+    if (!isAdmin && !isAdminRoute) {
+      const linkedType = is3pc ? '3pc' : 'employee';
+      const linkedCode = String(user.employeeCode || user.username || '').trim().toUpperCase();
+      const clientIp = getClientIp(req);
+      const macCheck = await macAddressEnforcementService.evaluateLoginMac({
+        linkedType,
+        linkedCode,
+        clientMac: resolveLoginClientMac(req, clientIp),
+      });
+      if (!macCheck.allowed) {
+        return res.status(403).json({
+          message: macCheck.message || 'Access denied: unauthorized device.',
+        });
       }
     }
 

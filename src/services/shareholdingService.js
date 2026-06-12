@@ -300,25 +300,12 @@ async function upsertShareholding(payload) {
     if (!existing || normalizePan(existing.pan) !== pan) {
       throw new Error('Invalid history record for this PAN.');
     }
-    const nextYear = year;
-    const nextProject = projectKey;
-    if (
-      (existing.year !== nextYear || existing.projectKey !== nextProject) &&
-      (await ShareholdingHistory.findOne({
-        pan,
-        year: nextYear,
-        projectKey: nextProject,
-        _id: { $ne: existing._id },
-      }).lean())
-    ) {
-      throw new Error('Another history entry already exists for this year and project reference.');
-    }
     historyDoc = await ShareholdingHistory.findOneAndUpdate(
       { _id: existing._id },
       {
         $set: {
-          year: nextYear,
-          projectKey: nextProject,
+          year: existing.year,
+          projectKey: existing.projectKey,
           pan,
           shareholder: shareholder._id,
           ...historyData,
@@ -328,20 +315,16 @@ async function upsertShareholding(payload) {
     ).lean();
   } else {
     const dataEntryBy = String(payload.dataEntryBy || '').trim();
-    historyDoc = await ShareholdingHistory.findOneAndUpdate(
-      { pan, year, projectKey },
-      {
-        $set: {
-          pan,
-          year,
-          projectKey,
-          shareholder: shareholder._id,
-          ...historyData,
-        },
-        ...(dataEntryBy ? { $setOnInsert: { dataEntryBy } } : {}),
-      },
-      { new: true, upsert: true, setDefaultsOnInsert: true },
-    ).lean();
+    const uniqueProjectKey = `_${new mongoose.Types.ObjectId().toString()}`;
+    const createPayload = {
+      pan,
+      year: '_',
+      projectKey: uniqueProjectKey,
+      shareholder: shareholder._id,
+      ...historyData,
+    };
+    if (dataEntryBy) createPayload.dataEntryBy = dataEntryBy;
+    historyDoc = (await ShareholdingHistory.create(createPayload)).toObject();
   }
 
   const allHistory = await ShareholdingHistory.find({ pan })

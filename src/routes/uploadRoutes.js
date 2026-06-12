@@ -4,7 +4,7 @@ const express = require('express');
 const multer = require('multer');
 const { authMiddleware } = require('../middleware/authMiddleware');
 const { requireRole, ROLES, requireAdmin } = require('../middleware/requireRole');
-const { requireSection, requireAnySectionOr3p } = require('../middleware/requirePermission');
+const { requireSection, requireAnySection, requireAnySectionOr3p } = require('../middleware/requirePermission');
 const {
   require3pMatchCodeForUpload,
   withUpload3pMeta,
@@ -77,6 +77,15 @@ const cmsBannerUploadGuard = [
   authMiddleware,
   requireRole(ROLES.ADMIN, ROLES.EMP),
   requireSection('cms', 'banners'),
+];
+
+const testimonialPhotoUploadGuard = [
+  authMiddleware,
+  requireRole(ROLES.ADMIN, ROLES.EMP),
+  requireAnySection([
+    ['cms', 'banners'],
+    ['adminPersonnel', 'media'],
+  ]),
 ];
 
 const cmsGiffUploadGuard = [
@@ -331,7 +340,7 @@ router.post(
 
 router.post(
   '/testimonial-photo',
-  cmsBannerUploadGuard,
+  testimonialPhotoUploadGuard,
   cloudinaryUpload.single('image'),
   async (req, res) => {
     if (!req.file) {
